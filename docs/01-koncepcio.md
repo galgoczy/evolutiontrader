@@ -1,0 +1,304 @@
+# EvolutionTrader – koncepció és kutatási összefoglaló
+
+*Állapot: 1. változat, 2026-10-09. Ez a dokumentum a laboratórium „miért és mit” része. A „hogyan” (technikai specifikáció Claude Code-nak) külön dokumentum lesz, miután a nyitott kérdéseket (13. fejezet) eldöntötted.*
+
+---
+
+## 0. Egy oldalban: mit javaslok
+
+**Piac:** kripto perpetual (örökös határidős) kontraktusok, USD-ben elszámolva, a 6-8 legnagyobb forgalmú coinon (BTC, ETH, SOL, BNB, XRP, DOGE, később bővíthető). Nem spot, nem grid. Indoklás a 2. fejezetben.
+
+**Idősík:** 4 órás és napi gyertyák. Semmi 5 perc alatti. Itt nincs sebességverseny, és a jelek statisztikailag is tartósabbak.
+
+**Adat:** ingyenes, visszamenőleg ~6-8 év: Binance nyilvános adattár (gyertyák, mark/index ár, premium index) és Hyperliquid nyílt API (funding, open interest). Az első naptól saját rögzítő is fut, mert az order book és a tényleges spread csak élőben gyűjthető.
+
+**Stratégiacsaládok induláskor (5 család, ~25 variáns):**
+1. Trendkövetés / idősoros momentum (a legerősebb akadémiai bizonyíték kriptóban)
+2. Volatilitás-kitörés szűkülés után
+3. Relatív erő párok (ETH/BTC, SOL/ETH) átlaghoz visszatéréssel
+4. Funding-rate és open-interest alapú pozícionáltsági jelek (kontrariánus + szűrő)
+5. A meglévő CHoCH+FVG bot, a saját eredeti szabályaival (kontroll-egyed)
+
+**Hogyan fejlődik:** heti ciklus. A bíró (kód) kiértékel és rangsorol. A kutató (Claude) a heti riportból hipotéziseket ír, minden hipotézishez közgazdasági indoklást. A fejlesztő (Claude Code) implementál és visszatesztel. A populáció fix méretű: csak akkor jön be új egyed, ha egy gyenge kiesik. Minden kísérlet naplózva, a kipróbált variánsok száma a bíró egyik bemenete (deflated Sharpe).
+
+**Védelem túlillesztés ellen (3+1 réteg):** érinthetetlen holdout szakasz; walk-forward és kombinatorikus (CPCV) validáció; többszörös tesztelés korrekciója (deflated Sharpe, PBO); plusz a „miért működik” kötelező indoklás.
+
+**Előléptetés:** visszateszt → élő paper (min. 200 kötés, 2 rezsim) → mikro-éles (~50 USD) → éles. Minden kapu számszerű, visszalépéssel.
+
+**Reális várakozás:** 2-3 hónap, mire az első stratégia a mikro-éles szintre ér. A rendszer első 8 hete alatt a fő termék nem a hozam, hanem a mérőműszer: egy megbízható bíró és egy tiszta adatfolyam. Ha ez a kettő rossz, minden utána jövő döntés rossz.
+
+---
+
+## 1. Mit mond a kutatás (2024-2026 állás)
+
+Nyitott szemmel néztem körül: van-e már bevált gyakorlat arra, amit építeni akarunk. Három területen találtam használhatót.
+
+### 1.1 Az „LLM mint mutációs operátor” irány már létezik és működik
+
+2025-2026-ban több tanulmány jelent meg pontosan erről: egy nyelvi modell nem maga kereskedik, hanem **stratégiakódot módosít egy evolúciós keretben**, és a kiértékelés különálló, determinisztikus kód.
+
+- **AlgoEvolve** (2026): az LLM „szemantikus mutációs operátor”, futtatható Python stratégiákat alakít át, és egy külső meta-evolúciós hurok magát a mutálás módját is finomítja. A szerzők rezsim-adaptív logika megjelenéséről számolnak be.
+- **QuantaAlpha** (2026) és **CogAlpha** (2025/26): minden kutatási „pályát” egyedként kezelnek, mutáció és keresztezés van, és külön kapuk (gating) szűrik a zajt és a nem-stacionaritást.
+- **AlphaPROBE** (2026): visszakeresés + irányított evolúció; a klasszikus genetikus programozás (gplearn) a baseline, amit az LLM-es változat ver.
+- Egy 2026-os áttekintő tanulmány (*Agentic Quantitative Trading: A Survey*) rendszerezi ezt a területet.
+
+**Tanulság nekünk:** az alapötletünk nem egyedi, hanem egy formálódó bevett gyakorlat. Amit ezek a rendszerek megerősítenek:
+- az LLM **kódot** változtat, nem jeleket ad kereskedés közben;
+- a fitnesz/kiértékelés **nem az LLM dolga**;
+- a populáció és a pályanapló kell, nem egy stratégia;
+- a meta-szint (hogyan mutálunk, milyen promptot kap a kutató) maga is fejleszthető.
+
+Amit ezek a tanulmányok **nem** oldanak meg jól, és nekünk kell: a legtöbb kínai részvénypiaci faktor-benchmarkon (CSI300) mér, nem kriptón, és a túlillesztés-védelem gyakran csak egy hold-out. Mi ezt szigorúbbra vesszük.
+
+### 1.2 A túlillesztés elleni eszköztár kiforrott, csak alkalmazni kell
+
+Bailey, Borwein, López de Prado és Zhu munkái (2014-2018) a mérce, azóta nincs jobb:
+
+- **Minimum Backtest Length:** példájuk szerint 5 év napi adaton már ~45 variáns kipróbálása után a legjobb várhatóan 1,0 feletti Sharpe-ot mutat **puszta véletlenből**. Ez pontosan a mi kockázatunk: heti 20-30 variáns.
+- **Deflated Sharpe Ratio (DSR):** a mért Sharpe-ot lehúzza a kipróbált variánsok száma és a hozamok nem-normalitása (ferdeség, csúcsosság) szerint. **Ehhez minden kísérletet naplózni kell, a bukottakat is.** Ha csak a nyerteseket írjuk fel, a DSR hazudik.
+- **Probability of Backtest Overfitting (PBO)** és **CPCV** (kombinatorikus, tisztított keresztvalidáció): nem egy, hanem sok in-sample/out-of-sample útvonalat generál, és azt nézi, a rangsor stabil-e. Egy forrás szerint a DSR a nagyságot, a PBO a rangsor-stabilitást méri, és a kettő együtt lényegesen erősebb, mint bármelyik külön.
+- **Purging és embargó:** ha a címkék átfednek időben (egy 4 órás jel napokig tartó pozíciót nyit), a tanító és a teszt szakasz közé időrést kell tenni, különben szivárog az információ.
+
+**Tanulság nekünk:** a bíró a fenti négy mutatót számolja, nem csak a profit factort. És a kísérletnapló (trial ledger) a rendszer egyik központi adattáblája, nem melléktermék.
+
+### 1.3 Mely kripto-anomáliákra van tényleges bizonyíték
+
+Itt a kép vegyesebb, mint a marketing sugallja.
+
+| Jelenség | Bizonyíték erőssége | Megjegyzés |
+|---|---|---|
+| Idősoros momentum / trendkövetés nagy coinokon | **Erős.** Liu–Tsyvinski (NBER 2018, Journal of Finance 2022): erős idősoros momentum; a hatás a nagy kapitalizációjú coinokon erősebb. Rozario et al. (2020): egy évtized walk-forward bizonyítéka, árupiaci jellegű viselkedés. | Han–Kang–Ryu: költségek után sok momentum-portfólió eltűnik, az idősoros marad, a keresztmetszeti gyengül. Rövid lookback jobb Sharpe-ot ad, de a sűrű újrasúlyozás költsége ezt viszi (Monash). |
+| Funding rate mint kontrariánus jel | **Gyenge/vitatott.** A BitMEX saját elemzése szerint a funding önmagában nincs szignifikáns előrejelző erővel. Egy blogteszt 0,84 Sharpe-ot mutat long-only, költség nélkül. | A szélsőséges funding-epizódok száma 2016 óta ~90%-kal csökkent. **Szűrőként** (pozícióméret, irány-tiltás) valószínűbb a hasznossága, mint önálló belépőjelként. |
+| Rezsimdetektálás rejtett Markov-modellel | **Közepes.** 4 állapotú HMM Bitcoinon bull/bear/calm rezsimeket különít el, és egy US részvény tanulmányban rezsim-alapú modellváltás out-of-sample jobb, mint bármelyik egyedi modell. | Ez a mi allokátor-rétegünk közvetlen precedense. |
+| Volatilitás-kitörés | **Nincs független bizonyíték** 4h/napi szinten költségek után. A talált tesztek rács-keresésesek (= többszörös tesztelés). | Marad a populációban, de alacsony prior-ral; a bíró dönt. |
+| Átlaghoz visszatérés párokon (ETH/BTC) | **Nem találtam** peer-reviewed kointegrációs bizonyítékot ETH/BTC-re. | Közgazdasági logika van (ugyanaz a kockázati étvágy mozgatja), bizonyíték nincs. Alacsony prior. |
+
+**Tanulság nekünk:** a populáció induló súlya ne legyen egyenletes. A trendkövető család kapja a legtöbb variánst (10-12), a többi 3-5-öt. A funding-jel elsősorban szűrő és rezsim-címke, nem önálló stratégia.
+
+---
+
+## 2. Piacválasztás: mire és hol
+
+### 2.1 Spot, grid vagy perpetual?
+
+| | Spot | Grid bot | Perpetual |
+|---|---|---|---|
+| Short lehetséges | nem | nem | **igen** |
+| Funding/OI adat mint jel | nincs | nincs | **van** |
+| Trendkövetés mindkét irányba | fél | nem | **igen** |
+| Veszteség oldalvolat piacon | tartás | **nyer**, de trendben kiürül | stratégiafüggő |
+| Tőkeigény kis tétnél | magas | magas | alacsony (de tőkeáttét = kockázat) |
+| Paper-szimuláció pontossága | könnyű | könnyű | **nehezebb** (funding, likvidáció, mark vs. last) |
+
+**Javaslat: perpetual, 1-2x tőkeáttéttel maximum.** Három ok:
+1. A legerősebb bizonyítékkal rendelkező család (trendkövetés) csak akkor teljes, ha short is lehet. Bear piacon spot trendkövetés csak készpénzben ül.
+2. A funding és open interest egyedi kripto-adat, ami csak itt létezik, és rezsimjelnek jó.
+3. A kis tőke (50 USD mikro-éles) csak itt értelmezhető: spotban 50 USD-ből a díjak elviszik a hozamot.
+
+A grid bot nem stratégia, hanem egy fix viselkedés (oldalazó piacon pénzt szed, trendben készletet halmoz). **Egy grid-variáns bekerülhet a populációba** mint „oldalazó rezsim specialista”, de az egész rendszer alapjaként rossz, mert nem tud fejlődni.
+
+Fontos ár: a perpetual szimulátornak modelleznie kell a funding-fizetést (8 óránként), a mark árat, a likvidációs küszöböt és a díjakat (taker ~0,035-0,05%, maker kevesebb). Ha ezt elhagyjuk, a paper-eredmény hazudik.
+
+### 2.2 Melyik tőzsde (adat és később kivitelezés)
+
+- **Adatforrás:** Binance (legmélyebb likviditás, 2017-től ingyenes nyilvános adattár: gyertyák minden felbontásban, futures mark/index/premium index). Hyperliquid nyílt Info API: funding, OI, gyertyák, kulcs nélkül.
+- **Paper-végrehajtás:** saját szimulátor az élő Binance/Hyperliquid árfolyamon, **nem** tőzsdei testnet. A testnet likviditása nem valós, és a testnet-adat nem reprodukálható.
+- **Mikro-éles és éles:** Hyperliquid (on-chain, nincs KYC-geoblokk a nyilvános API-n, Python SDK van, testnet is) vagy Bybit/Binance, ahol az számodra elérhető. **Ezt neked kell eldönteni** a lakóhely/KYC alapján (lásd 13. fejezet). A Binance és a Bybit nyilvános API-ja geo-korlátozott, erre figyelni kell.
+
+### 2.3 Coinok és idősík
+
+- **Induló univerzum:** BTC, ETH, SOL, BNB, XRP, DOGE. Kritérium: top-10 napi perpetual forgalom, min. 3 év adat. Évente felülvizsgálat kóddal, nem kézzel.
+- **Idősík:** 4h a jelképzésre, 1D a rezsimcímkére. Ok: itt a díj/hozam arány elviselhető, a jelek túlélik a költséget, és nincs ellenfél, aki milliszekundumban gyorsabb.
+- A CHoCH+FVG bot M15/M5 szintjei **nem** kerülnek a populációba. A bot H1/H4 változata igen.
+
+---
+
+## 3. Mutatók: mit mér a bíró
+
+A bíró kód. Minden stratégiavariánsról ugyanazt a mutatókészletet számolja, ugyanazon az adaton, ugyanazzal a költségmodellel.
+
+### 3.1 Kötelező alapmutatók (minden szinten)
+| Mutató | Mit mond | Miért kell |
+|---|---|---|
+| Kötésszám | hány lezárt kötés | 30 alatt semmi nem szignifikáns |
+| Profit factor | bruttó nyereség / bruttó veszteség | egyszerű, robusztus |
+| Max drawdown | legnagyobb visszaesés | ez öl meg a valóságban |
+| Sharpe (évesített) | hozam/szórás | iparági közös nyelv |
+| Sortino, Calmar | lefelé szórás, hozam/DD | a Sharpe egyedül félrevezet |
+| Átlagos tartási idő, forgás | mennyit kereskedik | költségérzékenység |
+| Költségérzékenység | eredmény 1x, 2x, 3x díj mellett | ami 2x díjnál eltűnik, nem valódi |
+
+### 3.2 Túlillesztés-mutatók (ezek döntenek az előléptetésről)
+| Mutató | Küszöb (induló javaslat) |
+|---|---|
+| **Deflated Sharpe (DSR)** a heti kísérletszámmal | > 0,95 valószínűség, hogy a valódi Sharpe > 0 |
+| **PBO** (CPCV, min. 16 út) | < 0,2 |
+| **OOS/IS arány** (walk-forward) | out-of-sample Sharpe ≥ 50%-a az in-sample-nek |
+| **Holdout eredmény** | csak az előléptetési kapunál fut, egyszer, és naplózva |
+| **Rezsim-lefedettség** | pozitív várható érték legalább 2 különböző rezsimben |
+| **Paraméter-stabilitás** | ±20% paraméterváltásra az eredmény ne forduljon negatívba |
+
+### 3.3 Rezsimcímkék (minden stratégia bemenete, kódból)
+Napi szinten, három tengelyen: **trend** (pl. 50/200 napi átlag + ADX), **volatilitás** (realizált vol percentilis), **pozícionáltság** (funding percentilis, OI-változás). Induláskor szabályalapú; később HMM (4 állapot) mint variáns. Az LLM címkézés csak **javaslat** a kutatói riportban, a bíró a kódból számolt címkét használja.
+
+---
+
+## 4. Hogyan lesz fejlődő: az evolúciós hurok
+
+### 4.1 Heti ciklus (hétfő hajnal)
+
+1. **Bíró** lefuttat minden mutatót az élő paper-naplón és a visszateszten. Rangsorol. Az alsó 20% kiesik (de a naplója megmarad).
+2. **Heti riport** (generált, gép-olvasható + ember-olvasható): ki nyert, mikor, milyen rezsimben; ki vesztett; mi a populáció diverzitása (korrelációk).
+3. **Kutató (Claude)** elolvassa a riportot és a kísérletnaplót, és 3-5 **hipotézist** ír. Kötelező mezők: mi a változtatás, **miért kellene működnie közgazdaságilag**, mely rezsimben várható javulás, mi cáfolná. Ha a „miért” hiányzik, a hipotézis nem fut.
+4. **Fejlesztő (Claude Code)** a hipotézisekből variánsokat ír a stratégiasablonból, lefuttatja a bíró visszatesztjét (holdout **nélkül**). Minden futás a kísérletnaplóba kerül, akkor is, ha bukik.
+5. Ami átmegy a visszateszt-kapun, bekerül a paper-populációba a kiesettek helyére. Fix populációméret (induló 30, max 50).
+6. **Allokátor** újraszámolja, melyik bizonyított stratégia mennyi tőkét kap a jelenlegi rezsimben.
+
+### 4.2 Honnan jön az új variáns (mutációs operátorok)
+- **Paraméter-mutáció:** lookback, küszöb ±20-50%.
+- **Szűrő hozzáadás/elvétel:** volumen, volatilitás, funding, napszak/hétvége.
+- **Keresztezés:** egy család belépője + másik család kilépője.
+- **Rezsim-feltételezés:** ugyanaz a szabály, csak bizonyos rezsimcímke alatt aktív.
+- **Családon belüli újraírás:** az LLM átfogalmazza a szabályt (AlgoEvolve-stílus), de a sablon API-ján belül.
+
+A kutató minden héten köteles legalább egy **nem-paraméter** mutációt javasolni, különben a populáció összeszűkül egy család körül (ezt a bíró méri: ha a top 10 páronkénti korrelációja > 0,8, diverzitás-büntetés).
+
+### 4.3 Meta-szint (a rendszer önmagát is javítja, de lassan)
+Havonta egyszer a kutató a **saját hipotéziseinek találati arányát** nézi: a 4 hét alatt javasolt hipotézisek hány %-a ment át a kapun, családonként. Ez a kutatói prompt egyetlen megengedett bemenete a változtatáshoz. Az AlgoEvolve ezt hívja meta-evolúciónak. Nálunk ez emberi jóváhagyással történik, nem automatikusan.
+
+### 4.4 Mi az, ami **soha** nem változik automatikusan
+- A holdout időszak határai.
+- A bíró képletei és küszöbei.
+- A költségmodell.
+- Az előléptetési létra kapui.
+Ezek verziózottak, és változtatás csak explicit döntéssel, dátummal, indoklással.
+
+---
+
+## 5. Előléptetési létra (számszerű kapuk)
+
+| Szint | Belépés feltétele | Kilépés (visszalépés) feltétele |
+|---|---|---|
+| **L0 Hipotézis** | van közgazdasági indoklás | – |
+| **L1 Visszateszt** | DSR > 0,95; PBO < 0,2; OOS/IS ≥ 0,5; PF > 1,3 2x díjnál; max DD < 25%; ≥ 100 kötés | – |
+| **L2 Élő paper** | L1 + holdout-on PF > 1,1 (egyszer, naplózva) | 200 kötés után PF < 1,1, vagy DD > 1,5× visszatesztelt DD, vagy 2 rezsimben nincs pozitív EV |
+| **L3 Mikro-éles (~50 USD)** | L2 ≥ 200 kötés, ≥ 2 rezsim, paper PF ≥ 1,2, realizált slippage ≤ modellezett ×1,5 | 100 kötés után élő PF < 1,0 vagy DD > paper DD ×1,5 |
+| **L4 Éles** | L3 ≥ 100 kötés, élő/paper eltérés < 30%; allokátor által elfogadott | bármikor, ha az L3 kilépési feltétel teljesül |
+
+A holdout: az utolsó **12 hónap** adat, amit az L1 visszateszt soha nem lát. A holdout-futás eredménye naplózva; egy variáns **egyszer** futhat rajta. Ha megbukik, nem lehet „kicsit módosítva” újra futtatni rajta ugyanazon a héten (ez a holdout-égetés elleni szabály).
+
+---
+
+## 6. Allokátor (a meta-réteg)
+
+Amíg nincs 3 L3-as stratégia, az allokátor egyszerű: **egyenlő kockázat** (volatilitás-cél, pl. minden stratégia napi 1% kockázatra skálázva). Ettől a ponttól kezdve kísérletezhető:
+- rezsimfüggő súlyok (HMM-állapotonként külön súlyvektor, walk-forward tanulva),
+- inverz-korreláció súlyozás,
+- „bizalom” súly: élő/paper eltérés alapján.
+
+Az allokátor maga is egy stratégia a bíró szemében: ugyanazok a kapuk vonatkoznak rá. Ez az, amit a professzionális alapok csinálnak, és ami kis tőkével is tanulható papíron.
+
+---
+
+## 7. Architektúra vázlat (nem technikai részletezés)
+
+```
+[Adatgyűjtő]  Binance Vision bulk + Hyperliquid Info API + saját élő rögzítő
+      │           (parquet fájlok, DuckDB lekérdezés)
+      ▼
+[Rezsimcímkéző] kód: trend / vol / pozícionáltság → napi címkék
+      │
+      ▼
+[Stratégiasablon] egy Python osztály: jel(), méret(), kilépés(); csak ezt írja az LLM
+      │
+      ▼
+[Szimulátor]  visszateszt + élő paper ugyanazzal a kóddal (funding, mark ár, díj, slippage)
+      │
+      ▼
+[Bíró]        mutatók, DSR, PBO, CPCV, walk-forward, holdout-kapu, kísérletnapló
+      │
+      ├──► [Heti riport] → [Kutató: Claude] → hipotézisek → [Fejlesztő: Claude Code]
+      │
+      ▼
+[Allokátor]   súlyok rezsim szerint
+      │
+      ▼
+[Végrehajtó]  L3/L4: tőzsdei adapter (Hyperliquid SDK / CCXT); L0-L2: nincs
+      │
+      ▼
+[Dashboard]   torna-tábla, családok, rezsimek, létra állapota
+```
+
+**Eszközjavaslat:** Python; saját, vektorizált szimulátor (a perpetual-specifikus költségmodell miatt; a vectorbt jó alap, de a funding-logika hiányzik belőle); DuckDB + parquet az adatra; CCXT vagy Hyperliquid SDK a későbbi végrehajtásra; a NautilusTrader erős, de a tanulási költsége nagy, és csak L3-tól lenne szükség rá. Egy ember + Claude Code mérete mellett a saját, kicsi, érthető szimulátor jobb, mint egy nagy keretrendszer.
+
+---
+
+## 8. Mi az, amit ez a rendszer **nem** old meg
+
+- **Nem ad gyorsan pénzt.** Az első 8 hét kimenete egy bíró, egy adatfolyam és egy 30 fős populáció paper-naplója. Hozam nincs.
+- **Nem véd a rezsimváltástól, amit még nem látott.** 2021-es és 2022-es adat van, de a következő válság más lesz. Ezért a visszalépési szabályok.
+- **Nem helyettesíti a te döntésedet** a bíró képleteiről és a tőzsdeválasztásról.
+- **A bizonyíték kriptóban vékonyabb, mint részvényben.** A trendkövetés kivételével minden családot „valószínűleg zaj” prior-ral kezeljünk, amíg a bíró mást nem mond.
+
+---
+
+## 9. Első 8 hét ütemterv
+
+| Hét | Mi készül | Mi a siker jele |
+|---|---|---|
+| 1-2 | Adatgyűjtő + rezsimcímkéző + 1 trendkövető stratégia + szimulátor | egy visszateszt reprodukálhatóan lefut, költséggel, funding-gal |
+| 3-4 | Bíró (összes mutató, DSR, PBO, walk-forward), kísérletnapló, holdout elkülönítve | a bíró egy tudottan túlillesztett variánst elutasít, egy egyszerűt átenged |
+| 5 | Élő paper futtatás 10 variánssal, napi riport | a paper-napló és a visszateszt ugyanarra az időszakra egyezik (±5%) |
+| 6 | Kutató és fejlesztő hurok az első heti riporton, 5 hipotézis | a hipotézisek naplózva, 1-2 bekerül L2-be |
+| 7-8 | Populáció 30-ra bővítve, mind az 5 család, CHoCH+FVG beillesztve, dashboard v1 | heti torna lefut emberi kéz nélkül |
+
+---
+
+## 10. Nyitott kérdések, amiket neked kell eldönteni
+
+1. **Tőzsde a mikro-éleshez:** Hyperliquid (on-chain, SDK, testnet) vagy Bybit/Binance? Mi érhető el neked KYC/lakóhely szerint?
+2. **Holdout hossza:** 12 hónap (javaslat) vagy 6 hónap? Rövidebb = több adat a fejlesztésre, de gyengébb védelem.
+3. **Populációméret:** 30 indulásra (javaslat) vagy 50? Több egyed = magasabb DSR-küszöb, lassabb kiértékelés.
+4. **Mennyire automatikus a kutató?** Javaslat: a hipotéziseket minden héten te is látod, és jóváhagyás nélkül is futnak L1-ig, de L2-be csak emberi jóváhagyással.
+5. **A CHoCH+FVG bot forráskódja** hol van, milyen nyelven, milyen idősíkon? Ettől függ a beillesztés módja.
+
+---
+
+## 11. Források
+
+Túlillesztés-védelem:
+- [Purged cross-validation (Wikipedia)](https://en.wikipedia.org/wiki/Purged_cross-validation)
+- [Probability of Backtest Overfitting (LuxAlgo)](https://www.luxalgo.com/library/concept/probability-of-backtest-overfitting.md)
+- [Backtest overfitting and the Deflated Sharpe Ratio (tradinginterview)](https://www.tradinginterview.com/courses/machine-learning/lessons/backtest-overfitting-and-the-deflated-sharpe-ratio/)
+- [Bailey, Borwein, López de Prado, Zhu: Pseudo-mathematics and financial charlatanism / MinBTL](https://carmamaths.org/jon/backtest.pdf)
+- [Bailey & López de Prado: The Deflated Sharpe Ratio (SSRN)](https://papers.ssrn.com/abstract=2606462)
+- [Bailey et al.: The Probability of Backtest Overfitting](https://carmamaths.org/jon/BODT.pdf)
+- [Backtesting & Research Methodology (tradingstrategy.ai)](https://tradingstrategy.ai/docs/learn/backtesting.html)
+
+LLM-vezérelt evolúciós stratégiafejlesztés:
+- [AlgoEvolve: LLM-driven Meta-evolution of Algorithmic Trading Programs (arXiv 2606.26173)](https://arxiv.org/pdf/2606.26173)
+- [QuantaAlpha: An Evolutionary Framework for LLM-Driven Alpha Mining (arXiv 2602.07085)](https://arxiv.org/abs/2602.07085)
+- [Cognitive Alpha Mining via LLM-Driven Code-Based Evolution (arXiv 2511.18850)](https://arxiv.org/pdf/2511.18850)
+- [AlphaPROBE (arXiv 2602.11917)](https://arxiv.org/pdf/2602.11917)
+- [Agentic Quantitative Trading: A Survey (arXiv 2608.31041)](https://arxiv.org/pdf/2608.31041)
+
+Kripto-anomáliák bizonyítéka:
+- [Liu & Tsyvinski: Risks and Returns of Cryptocurrency (NBER w24877)](https://www.nber.org/system/files/working_papers/w24877/w24877.pdf)
+- [Liu, Tsyvinski & Wu: Common Risk Factors in Cryptocurrency (NBER w25882)](https://www.nber.org/papers/w25882.pdf)
+- [Rozario et al.: A Decade of Evidence of Trend Following Investing in Cryptocurrencies (arXiv 2009.12155)](https://arxiv.org/pdf/2009.12155)
+- [Time Series and Cross Sectional Momentum in the Cryptocurrency Market (AUT)](https://acfr.aut.ac.nz/__data/assets/pdf_file/0009/918729/Time_Series_and_Cross_Sectional_Momentum_in_the_Cryptocurrency_Market_with_IA.pdf)
+- [Monash: Trend-following strategies for crypto investors](https://www.monash.edu/business/monash-centre-for-financial-studies/our-research/all-projects/investment-strategy/trend-following-strategies-for-crypto-investors)
+- [BitMEX: XBTUSD Funding Mean Reversion Strategy](https://www.bitmex.com/blog/xbtusd-funding-mean-reversion-strategy)
+- [The Two-Tiered Structure of Cryptocurrency Funding Rate Markets (MDPI)](https://www.mdpi.com/2227-7390/14/2/346)
+- [Exploring the Predictability of Cryptocurrencies via Bayesian Hidden Markov Models (arXiv 2011.03741)](https://arxiv.org/pdf/2011.03741.pdf)
+- [HMM/HSMM Bitcoin vs S&P 500 (University of Malta)](https://www.um.edu.mt/library/oar/bitstream/123456789/98539/1/Analysis%20and%20comparison%20of%20Bitcoin%20and%20S%20and%20P%20500%20market%20features%20using%20HMMs%20and%20HSMMs.pdf)
+- [Regime-switching factor allocation (MDPI JRFM)](https://www.mdpi.com/1911-8074/13/12/311/htm)
+
+Adat és eszközök:
+- [Binance Public Data (hivatalos repo)](https://github.com/binance/binance-public-data/)
+- [binance-bulk-downloader](https://github.com/aoki-h-jp/binance-bulk-downloader)
+- [Hyperliquid API docs](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api.md)
+- [hyperliquid-python-sdk](https://pypi.org/project/hyperliquid-python-sdk/)
+- [Hyperliquid funding rate history guide (OneKey)](https://onekey.so/blog/ecosystem/hyperliquid-funding-rate-history-api/)
+- [Freqtrade vs Hummingbot (Gainium)](https://gainium.io/compare/freqtrade-vs-hummingbot)
+- [NautilusTrader comparison (pm.wiki)](https://pm.wiki/compare/nautilustrader-vs-polyrust)
