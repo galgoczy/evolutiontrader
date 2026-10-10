@@ -1,6 +1,6 @@
 # EvolutionTrader – koncepció és kutatási összefoglaló
 
-*Állapot: 2. változat, 2026-10-10 (a 10. fejezet döntéseivel frissítve). Ez a dokumentum a laboratórium „miért és mit” része. A „hogyan” (technikai specifikáció Claude Code-nak) külön dokumentum lesz, miután a nyitott kérdéseket (13. fejezet) eldöntötted.*
+*Állapot: 3. változat, 2026-10-10. Minden nyitott kérdés lezárva (10. fejezet), a meglévő `galgoczy/bot` repó mint kiindulási alap beépítve. Ez a dokumentum a laboratórium „miért és mit” része. A „hogyan” (technikai specifikáció Claude Code-nak) a következő dokumentum.*
 
 ---
 
@@ -17,7 +17,7 @@
 2. Volatilitás-kitörés szűkülés után
 3. Relatív erő párok (ETH/BTC, SOL/ETH) átlaghoz visszatéréssel
 4. Funding-rate és open-interest alapú pozícionáltsági jelek (kontrariánus + szűrő)
-5. A meglévő CHoCH+FVG bot, a saját eredeti szabályaival (kontroll-egyed)
+5. Dupla Bollinger-szalag (DBB) átlaghoz visszatérés rezsimszűrővel, a meglévő `galgoczy/bot` repóból átemelve (ez az egyetlen már megírt és tesztelt családunk, egyben kontroll-egyed)
 
 **Hogyan fejlődik (döntve: napi ciklus):** a kutató–fejlesztő–bíró hurok **naponta** fut a történelmi adaton (hipotézis → variáns → visszateszt → kapu). Ez a gyors rész, mert a múlt nem vár. Az élő paper-populáció kiértékelése folyamatos, de az elő- és visszaléptetés **kötésszámhoz** kötött, nem naptárhoz, mert 4 órás gyertyákon egy hét alatt nem gyűlik össze elég kötés egy döntéshez. A populáció fix méretű: csak akkor jön be új egyed, ha egy gyenge kiesik. Minden kísérlet naplózva, a kipróbált variánsok száma a bíró egyik bemenete (deflated Sharpe). Napi ciklus mellett ez a szám gyorsan nő, ezért a DSR-küszöb a valódi fék, nem a számítási kapacitás.
 
@@ -111,7 +111,8 @@ Fontos ár: a perpetual szimulátornak modelleznie kell a funding-fizetést (8 �
 
 - **Induló univerzum:** BTC, ETH, SOL, BNB, XRP, DOGE. Kritérium: top-10 napi perpetual forgalom, min. 3 év adat. Évente felülvizsgálat kóddal, nem kézzel.
 - **Idősík:** 4h a jelképzésre, 1D a rezsimcímkére. Ok: itt a díj/hozam arány elviselhető, a jelek túlélik a költséget, és nincs ellenfél, aki milliszekundumban gyorsabb.
-- A CHoCH+FVG bot M15/M5 szintjei **nem** kerülnek a populációba. A bot H1/H4 változata igen.
+- A `galgoczy/bot` DBB-stratégiái 1 órás gyertyára készültek. Átemeléskor 1h és 4h változat is készül; a bíró dönti el, melyik bírja a költséget.
+- CHoCH+FVG bot: nem található egyik repódban sem (lásd 10. fejezet), ezért nem része az induló populációnak.
 
 ---
 
@@ -250,6 +251,20 @@ Az allokátor maga is egy stratégia a bíró szemében: ugyanazok a kapuk vonat
 
 **Eszközjavaslat:** Python; saját, vektorizált szimulátor (a perpetual-specifikus költségmodell miatt; a vectorbt jó alap, de a funding-logika hiányzik belőle); DuckDB + parquet az adatra; CCXT vagy Hyperliquid SDK a későbbi végrehajtásra; a NautilusTrader erős, de a tanulási költsége nagy, és csak L3-tól lenne szükség rá. Egy ember + Claude Code mérete mellett a saját, kicsi, érthető szimulátor jobb, mint egy nagy keretrendszer.
 
+**Kiindulási alap (döntve): a `galgoczy/bot` repó.** Ez egy 2026 májusában írt Python visszateszt-rendszer (kb. 2600 sor), ami a fenti ábra több dobozát már tartalmazza:
+
+| Doboz az ábrán | Mi van már meg a `bot` repóban | Mit kell hozzá tenni |
+|---|---|---|
+| Adatgyűjtő | Binance USDT-M futures gyertya + funding letöltő (CCXT, nyilvános végpont), parquet cache | 6 coin a BTC helyett, 4h is, Hyperliquid élő rögzítő |
+| Rezsimcímkéző | 3 állapotú Markov-lánc kézi küszöbbel, Gaussian HMM, walk-forward újraillesztéssel | napi címke 3 tengelyen (trend/vol/pozícionáltság), címke mint közös bemenet, nem stratégián belüli szűrő |
+| Stratégiasablon | közös paraméter-osztály, indikátorok (EMA, ATR, Bollinger), 5 DBB-variáns | egységes `jel/méret/kilépés` felület, amit az LLM tölt ki; trendkövető, kitörés, funding családok |
+| Szimulátor | díj, slippage, funding 8 óránként, tőkeáttét-limit, megszakítók (sorozatos veszteség, napi/heti DD) | több coin egy portfólióban, élő paper mód ugyanazzal a kóddal, mark ár |
+| Bíró | profit factor, Sharpe, max DD, kötésszám, OOS/IS arány, nyereséges hónapok aránya, in-sample és out-of-sample kapu | DSR, PBO/CPCV, költségérzékenység, kísérletnapló, holdout-kapu, rezsim-lefedettség |
+| Kutató/fejlesztő hurok | nincs | teljes egészében új |
+| Allokátor, dashboard | nincs | új |
+
+A `bot` repó az 1. fázisánál (váz, adatletöltés) áll, eredménye még nincs. A kapu-küszöbei (in-sample PF 1,5 / Sharpe 1,0 / DD 30%; out-of-sample PF 1,3 / Sharpe 0,7 / DD 35% / OOS-IS arány 0,5 / nyereséges hónapok 50%) jó kiindulás az L1 kapuhoz, a DSR és PBO kerül föléjük.
+
 ---
 
 ## 8. Mi az, amit ez a rendszer **nem** old meg
@@ -281,12 +296,12 @@ Az allokátor maga is egy stratégia a bíró szemében: ugyanazok a kapuk vonat
 | Tőzsde | **Binance = adat** (hosszú történelem), **Hyperliquid = élő paper és végrehajtás** (nincs KYC, nyílt API) | funding-jeleket a Hyperliquid saját adatán újra kell igazolni L2-ben; rögzítő az első naptól |
 | Holdout | **6 hónap, gördülő** | szigorúbb holdout-égetési szabály (30 nap tiltás családon belül); az élő paper a második holdout |
 | Populáció | **50 indulásra, 100-ig bővíthető**; minden stratégia több coinon fut egy portfólióként | gyorsabban gyűlik a 200 kötés; a gép napi kiértékelési ideje a korlát, nem a tárhely |
-| Kutató automatizmusa | (még nem döntött, javaslat marad) L1-ig jóváhagyás nélkül fut, L2-be csak emberi jóváhagyással | |
+| Kutató automatizmusa | **L1-ig jóváhagyás nélkül fut, L2-be (élő paper) csak a te jóváhagyásoddal lép egyed** | a napi riport végén egy rövid „jóváhagyásra vár” lista; Telegram-értesítés, mint a JEVsniper botnál |
+| Gép | **Saját Mac mini, 0-24** | nincs felhőköltség; a napi hurok ütemezése launchd-vel vagy pm2-vel (a JEVsniper már pm2-vel fut ugyanezen a gépen); a Claude-hívások a kutató lépéshez API-kulccsal mennek, a Claude Code fejlesztő lépés helyben fut |
+| CHoCH+FVG bot | **Nem található.** Átnéztem a GitHub-fiókod repóit (JEVsniper, bot, cointidy és a többi): egyikben sincs CHoCH vagy FVG kód. Valószínűleg egy korábbi beszélgetésben tervezett, de meg nem írt bot. | kimarad az induló populációból; ha később előkerül a leírása, a kutató egy hipotézisként beviszi, ugyanazon a kapun át, mint bármi mást |
+| Kiindulási kód | **`galgoczy/bot` repó** (lásd 7. fejezet táblázata) | az adatletöltő, indikátorok, szimulátor, kapu-ellenőrzés és a két rezsimmodell átemelhető; a DBB-család lesz az első, már létező stratégiacsalád |
 
-**Még nyitott:**
-1. **A CHoCH+FVG bot forráskódja** hol van, milyen nyelven, milyen idősíkon? Ettől függ a beillesztés módja.
-2. **Kutató automatizmusa:** elfogadod-e a fenti javaslatot (L2-be csak jóváhagyással)?
-3. **Gép:** hol fut a rendszer napi szinten? Saját gép, VPS, vagy felhő? A napi kiértékelés 50-100 egyeddel, 6 coinon, 6 év 4 órás adaton egy közepes VPS-en percek, nem órák, de futnia kell minden éjjel.
+**Nincs több nyitott kérdés.** A következő lépés a technikai specifikáció Claude Code-nak.
 
 ---
 
