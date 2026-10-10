@@ -2,7 +2,7 @@
 
 | Fázis | Állapot | Megjegyzés |
 |---|---|---|
-| 0 Váz | kód kész, Mac minin ellenőrizendő | `bash scripts/setup-mac.sh`, majd `make verify-0` |
+| 0 Váz | **kész** (2026-10-10) | `make verify-0` zöld a Mac minin; launchd napi futás 0-s kóddal, Telegram OK |
 | 1 Adat | nem kezdődött | |
 | 2 Szimulátor + 1 stratégia | nem kezdődött | |
 | 3 Bíró | nem kezdődött | |
@@ -17,6 +17,7 @@
 - `ops/`: launchd sablon + telepítő, napi futtató szkript (`logs/daily.log`).
 - Tesztek: `tests/test_phase0.py` (config, DB idempotens, ledger append-only, daily, status, verzió).
 
-## Nyitott a 0. fázisban
-- `uv.lock` az első `uv sync` után a Mac minin jön létre: commitold.
-- `make verify-0` kimenetét a PR-ba.
+## 0. fázis – lezárás (2026-10-10)
+- `uv.lock` commitolva.
+- `make verify-0` zöld a Mac minin (6 teszt, Telegram ping elküldve); kimenet a PR #1 leírásában.
+- launchd napi futás (02:00) lefutott 0-s kilépési kóddal.
