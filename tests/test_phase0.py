@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from evolab import __version__
+from evolab import cli
 from evolab.cli import main
 from evolab.db import connect, init_db, list_tables
 
@@ -53,13 +54,27 @@ def test_ledger_append_only(cfg):
         assert conn.execute("SELECT COUNT(*) FROM trials").fetchone()[0] == 1
 
 
-def test_daily_without_telegram(cfg, capsys):
+def test_daily_without_telegram(cfg, capsys, monkeypatch):
+    # az 1. fázistól a `data` lépés valódi letöltés; itt csonkkal helyettesítjük (nincs hálózat)
+    monkeypatch.setitem(cli.STEP_FUNCS, "data", lambda cfg: "csonk")
     assert main(["daily"]) == 0
     out = capsys.readouterr().out
     assert "Telegram kihagyva" in out
     with connect(cfg.db_path) as conn:
         row = conn.execute("SELECT status FROM runs ORDER BY run_id DESC LIMIT 1").fetchone()
     assert row["status"] == "ok"
+
+
+def test_daily_step_error_reported(cfg, capsys, monkeypatch):
+    def boom(cfg):
+        raise RuntimeError("letöltési hiba")
+
+    monkeypatch.setitem(cli.STEP_FUNCS, "data", boom)
+    assert main(["daily"]) == 1
+    assert "HIBA: letöltési hiba" in capsys.readouterr().out
+    with connect(cfg.db_path) as conn:
+        row = conn.execute("SELECT status FROM runs ORDER BY run_id DESC LIMIT 1").fetchone()
+    assert row["status"] == "error"
 
 
 def test_status(cfg, capsys):
