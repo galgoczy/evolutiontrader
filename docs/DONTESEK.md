@@ -10,3 +10,4 @@ A specifikációban nem rögzített, megvalósítás közben hozott döntések. 
 | 2026-10-10 | 0 | A `ladder_events` tábla is csak beszúrható. | A létra-előzmény ugyanúgy bizonyíték, mint a kísérletnapló. |
 | 2026-10-10 | 0 | A launchd feladat LaunchAgent (felhasználói), nem LaunchDaemon. | Nem kell root; a Mac minin a felhasználó be van jelentkezve. Feltétel: automatikus bejelentkezés újraindítás után. |
 | 2026-10-10 | 0 | Telepítő szkript (`scripts/setup-mac.sh`) végigvezeti a Telegram beállítást is. | A felhasználó nem programozó; egy parancs legyen a teljes 0. fázis. |
+| 2026-10-10 | 0 | A launchd saját stdout/stderr naplója a `~/Library/Logs/evolutiontrader/` mappába kerül, a plistben nincs `WorkingDirectory`. | Az első próbán a launchd 78-as (EX_CONFIG) kóddal leállt, mert a külső kötet `logs/` mappáját nem érte el. A belső lemezen lévő napló mindig írható, így a hiba oka látható; a szkript maga lép be a repóba. |
