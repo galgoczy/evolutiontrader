@@ -1,0 +1,28 @@
+# Stratégiacsaládok, priorok és induló variánsszám (docs/02-specifikacio.md 3.1)
+families:
+  trend:
+    initial_variants: 14
+    prior: high
+    timeframes: [4h, 1h]
+    idea: "EMA-kereszt, Donchian-kitörés, idősoros momentum (20/60/120 lookback), ATR-trailing kilépés"
+  volbreak:
+    initial_variants: 6
+    prior: low
+    timeframes: [4h]
+    idea: "Bollinger-szűkülés (sávszélesség-percentilis < 20) utáni kitörés, ATR-stop"
+  relstrength:
+    initial_variants: 6
+    prior: low
+    timeframes: [4h]
+    idea: "ETH/BTC, SOL/ETH arány z-score, átlaghoz visszatérés long/short lábbal"
+  positioning:
+    initial_variants: 8
+    prior: medium_as_filter_low_standalone
+    timeframes: [4h]
+    idea: "Funding z-score és OI-változás szűrőként a trend-jeleken + 2 önálló kontrariánus variáns"
+  rangerev:
+    initial_variants: 6
+    prior: low
+    timeframes: [4h]
+    idea: "Bollinger-visszatérés, csak trend=flat címke alatt aktív"
+open_slots: 10

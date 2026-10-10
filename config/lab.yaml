@@ -1,0 +1,45 @@
+# Labor-konfiguráció. Ezt szabadon lehet módosítani (a bíró küszöbei NEM itt vannak).
+universe: [BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT, DOGEUSDT]
+timeframes: [1h, 4h, 1d]
+signal_timeframe: 4h            # alap jel-idősík; 1h csak a trend családban
+regime_timeframe: 1d
+history_start: "2020-01-01"     # Binance USDT-M perpetual; amelyik coin később indul, onnantól
+holdout_months: 6               # gördülő, a futás napjától visszafelé
+
+costs:
+  taker_fee: 0.00045
+  maker_fee: 0.00015            # induláskor nem használjuk, minden taker
+  slippage_base: 0.0002
+  slippage_atr_mult: 0.05       # ATR-arányos slippage-komponens (a gyertya ATR/ár arányának ennyiszerese)
+  funding_interval_hours: 8
+
+risk:
+  vol_target_daily: 0.01        # napi 1% portfólió-kockázat
+  max_gross_leverage: 2.0
+  max_weight_per_coin: 0.5
+  breakers:
+    consecutive_losses: 3       # -> 24 óra szünet
+    daily_dd_pct: 5             # -> 24 óra szünet
+    weekly_dd_pct: 10           # -> failed
+
+population:
+  initial: 40
+  open_slots: 10
+
+paths:
+  data: data
+  db: data/lab.db
+  reports: reports
+  hypotheses: hypotheses
+  logs: logs
+
+researcher:
+  model: claude-opus-5-5
+  max_hypotheses_per_day: 3
+
+schedule:
+  daily_run: "02:00"            # helyi idő, launchd
+
+sources:
+  binance_vision: https://data.binance.vision/data/futures/um
+  hyperliquid_info: https://api.hyperliquid.xyz/info

@@ -4,3 +4,13 @@ Evolúciós paper-trading laboratórium: egy populációnyi szabályalapú kript
 
 - [docs/01-koncepcio.md](docs/01-koncepcio.md) – koncepció, kutatási összefoglaló, piacválasztás, mutatók, evolúciós hurok, előléptetési létra, nyitott kérdések
 - [docs/02-specifikacio.md](docs/02-specifikacio.md) – technikai specifikáció Claude Code-nak: repó-szerkezet, adat, stratégiasablon, szimulátor, bíró, napi hurok, tesztek, fázisok
+
+## Indítás a Mac minin
+
+```bash
+cd "/Volumes/Mac Nvme Extended/Github/evolutiontrader"
+bash scripts/setup-mac.sh
+make verify-0
+```
+
+Állapot: [`docs/STATUS.md`](docs/STATUS.md) · Döntésnapló: [`docs/DONTESEK.md`](docs/DONTESEK.md) · Claude Code munkarend: [`CLAUDE.md`](CLAUDE.md)
