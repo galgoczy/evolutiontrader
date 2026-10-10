@@ -1,0 +1,21 @@
+# Adat és állapot (Time Machine / rsync menti)
+data/
+reports/
+logs/
+hypotheses/
+STOP
+
+# Titkok
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store
