@@ -1,6 +1,6 @@
 # EvolutionTrader – koncepció és kutatási összefoglaló
 
-*Állapot: 1. változat, 2026-10-09. Ez a dokumentum a laboratórium „miért és mit” része. A „hogyan” (technikai specifikáció Claude Code-nak) külön dokumentum lesz, miután a nyitott kérdéseket (13. fejezet) eldöntötted.*
+*Állapot: 2. változat, 2026-10-10 (a 10. fejezet döntéseivel frissítve). Ez a dokumentum a laboratórium „miért és mit” része. A „hogyan” (technikai specifikáció Claude Code-nak) külön dokumentum lesz, miután a nyitott kérdéseket (13. fejezet) eldöntötted.*
 
 ---
 
@@ -10,7 +10,7 @@
 
 **Idősík:** 4 órás és napi gyertyák. Semmi 5 perc alatti. Itt nincs sebességverseny, és a jelek statisztikailag is tartósabbak.
 
-**Adat:** ingyenes, visszamenőleg ~6-8 év: Binance nyilvános adattár (gyertyák, mark/index ár, premium index) és Hyperliquid nyílt API (funding, open interest). Az első naptól saját rögzítő is fut, mert az order book és a tényleges spread csak élőben gyűjthető.
+**Adat és tőzsde (döntve):** a visszateszt adata a Binance nyilvános adattárából jön (ingyenes, perpetual 2019-től, spot 2017-től). Az élő paper és a későbbi mikro-éles a Hyperliquidon fut (on-chain, nincs KYC, nyílt API kulcs nélkül, Python SDK). Az első naptól saját rögzítő gyűjti a Hyperliquid élő adatát, mert annak történelme csak 2023-tól van.
 
 **Stratégiacsaládok induláskor (5 család, ~25 variáns):**
 1. Trendkövetés / idősoros momentum (a legerősebb akadémiai bizonyíték kriptóban)
@@ -19,9 +19,9 @@
 4. Funding-rate és open-interest alapú pozícionáltsági jelek (kontrariánus + szűrő)
 5. A meglévő CHoCH+FVG bot, a saját eredeti szabályaival (kontroll-egyed)
 
-**Hogyan fejlődik:** heti ciklus. A bíró (kód) kiértékel és rangsorol. A kutató (Claude) a heti riportból hipotéziseket ír, minden hipotézishez közgazdasági indoklást. A fejlesztő (Claude Code) implementál és visszatesztel. A populáció fix méretű: csak akkor jön be új egyed, ha egy gyenge kiesik. Minden kísérlet naplózva, a kipróbált variánsok száma a bíró egyik bemenete (deflated Sharpe).
+**Hogyan fejlődik (döntve: napi ciklus):** a kutató–fejlesztő–bíró hurok **naponta** fut a történelmi adaton (hipotézis → variáns → visszateszt → kapu). Ez a gyors rész, mert a múlt nem vár. Az élő paper-populáció kiértékelése folyamatos, de az elő- és visszaléptetés **kötésszámhoz** kötött, nem naptárhoz, mert 4 órás gyertyákon egy hét alatt nem gyűlik össze elég kötés egy döntéshez. A populáció fix méretű: csak akkor jön be új egyed, ha egy gyenge kiesik. Minden kísérlet naplózva, a kipróbált variánsok száma a bíró egyik bemenete (deflated Sharpe). Napi ciklus mellett ez a szám gyorsan nő, ezért a DSR-küszöb a valódi fék, nem a számítási kapacitás.
 
-**Védelem túlillesztés ellen (3+1 réteg):** érinthetetlen holdout szakasz; walk-forward és kombinatorikus (CPCV) validáció; többszörös tesztelés korrekciója (deflated Sharpe, PBO); plusz a „miért működik” kötelező indoklás.
+**Védelem túlillesztés ellen (3+1 réteg):** érinthetetlen holdout szakasz (döntve: 6 hónap, plusz az élő paper-idő mint második, folyamatosan növekvő out-of-sample); walk-forward és kombinatorikus (CPCV) validáció; többszörös tesztelés korrekciója (deflated Sharpe, PBO); plusz a „miért működik” kötelező indoklás.
 
 **Előléptetés:** visszateszt → élő paper (min. 200 kötés, 2 rezsim) → mikro-éles (~50 USD) → éles. Minden kapu számszerű, visszalépéssel.
 
@@ -103,7 +103,9 @@ Fontos ár: a perpetual szimulátornak modelleznie kell a funding-fizetést (8 �
 
 - **Adatforrás:** Binance (legmélyebb likviditás, 2017-től ingyenes nyilvános adattár: gyertyák minden felbontásban, futures mark/index/premium index). Hyperliquid nyílt Info API: funding, OI, gyertyák, kulcs nélkül.
 - **Paper-végrehajtás:** saját szimulátor az élő Binance/Hyperliquid árfolyamon, **nem** tőzsdei testnet. A testnet likviditása nem valós, és a testnet-adat nem reprodukálható.
-- **Mikro-éles és éles:** Hyperliquid (on-chain, nincs KYC-geoblokk a nyilvános API-n, Python SDK van, testnet is) vagy Bybit/Binance, ahol az számodra elérhető. **Ezt neked kell eldönteni** a lakóhely/KYC alapján (lásd 13. fejezet). A Binance és a Bybit nyilvános API-ja geo-korlátozott, erre figyelni kell.
+- **Mikro-éles és éles (döntve): Hyperliquid.** On-chain, tárcával lép be az ember, nincs KYC, a nyilvános API kulcs nélkül megy, van Python SDK és testnet. A Binance marad adatforrásnak (ott van a hosszú történelem), de nem végrehajtó.
+
+**Miért nem a Hyperliquid adata a visszateszthez?** Mert rövid: a Hyperliquid 2023-ban indult, a Binance perpetual 2019-ben. A 2020-as összeomlás, a 2021-es bika, a 2022-es medve csak a Binance adatban van benne, és pont ezek a rezsimek kellenek a „2 rezsimben pozitív” kapuhoz. A nagy coinok ára a két tőzsdén század-százalékon belül együtt mozog, a funding viszont eltérhet, ezért a funding-alapú jeleket az élő paper szakaszban a Hyperliquid saját funding-adatán kell újra igazolni. A rögzítő ezért az első naptól gyűjti a Hyperliquid funding/OI/ár adatát, és egy év múlva már saját, végrehajtó-tőzsdei adatunk is lesz.
 
 ### 2.3 Coinok és idősík
 
@@ -145,14 +147,27 @@ Napi szinten, három tengelyen: **trend** (pl. 50/200 napi átlag + ADX), **vola
 
 ## 4. Hogyan lesz fejlődő: az evolúciós hurok
 
-### 4.1 Heti ciklus (hétfő hajnal)
+### 4.1 Két óra, két sebesség
 
-1. **Bíró** lefuttat minden mutatót az élő paper-naplón és a visszateszten. Rangsorol. Az alsó 20% kiesik (de a naplója megmarad).
-2. **Heti riport** (generált, gép-olvasható + ember-olvasható): ki nyert, mikor, milyen rezsimben; ki vesztett; mi a populáció diverzitása (korrelációk).
-3. **Kutató (Claude)** elolvassa a riportot és a kísérletnaplót, és 3-5 **hipotézist** ír. Kötelező mezők: mi a változtatás, **miért kellene működnie közgazdaságilag**, mely rezsimben várható javulás, mi cáfolná. Ha a „miért” hiányzik, a hipotézis nem fut.
-4. **Fejlesztő (Claude Code)** a hipotézisekből variánsokat ír a stratégiasablonból, lefuttatja a bíró visszatesztjét (holdout **nélkül**). Minden futás a kísérletnaplóba kerül, akkor is, ha bukik.
-5. Ami átmegy a visszateszt-kapun, bekerül a paper-populációba a kiesettek helyére. Fix populációméret (induló 30, max 50).
-6. **Allokátor** újraszámolja, melyik bizonyított stratégia mennyi tőkét kap a jelenlegi rezsimben.
+A rendszerben két óra jár. A **kutató óra** gyors, mert a történelmi adaton bármennyi kísérlet futhat. A **bizonyító óra** lassú, mert az élő piacon a kötések csak annyi sebességgel jönnek, amennyivel jönnek. A kettőt nem szabad összekeverni: a gyors óra termeli a jelölteket, a lassú óra dönt róluk.
+
+**Napi ciklus (kutató óra, minden éjjel):**
+1. **Bíró** frissíti a mutatókat a paper-naplón és a kísérletnaplón, és generál egy napi riportot: ki nyert és vesztett tegnap, milyen rezsimben, hol tart a populáció diverzitása.
+2. **Kutató (Claude)** a riportból 2-3 **hipotézist** ír. Kötelező mezők: mi a változtatás, **miért kellene működnie közgazdaságilag**, mely rezsimben várható javulás, mi cáfolná. Ha a „miért” hiányzik, a hipotézis nem fut.
+3. **Fejlesztő (Claude Code)** a hipotézisekből variánsokat ír a stratégiasablonból, lefuttatja a bíró visszatesztjét (holdout **nélkül**). Minden futás a kísérletnaplóba kerül, akkor is, ha bukik.
+4. Ami átmegy az L1 kapun, **várólistára** kerül.
+
+**Kötésszám-vezérelt ciklus (bizonyító óra, a bíró minden nap ellenőrzi, de csak akkor cselekszik, ha a feltétel teljesül):**
+5. Egy paper-egyed akkor kap ítéletet, amikor elérte a szintjéhez tartozó kötésszámot (L2: 200). Akkor vagy lép, vagy kiesik. Nincs „pénteken döntünk” szabály.
+6. Ha egy egyed kiesik, a várólistáról a legmagasabb DSR-ű jelölt lép a helyére. Fix populációméret: **induló 50 egyed**, bővítés 100-ig, amint a napi kiértékelés elfér a gépen.
+7. **Allokátor** hetente számol újra (ennek nem kell gyorsabb, a súlyok lassú jelek).
+
+**Hogyan lesz így gyorsabb a fejlődés?** Három karral, amik mind a kutató órát gyorsítják, és egyik sem rontja a bizonyítékot:
+- **Napi hipotézis helyett heti:** 7x több jelölt ugyanannyi idő alatt.
+- **Nagyobb populáció:** 50 egyed 4 órás gyertyán, 6 coinon kb. 10-30 kötést termel naponta összesen, tehát egy egyed hamarabb ér el 200-at, ha több coinon fut. Ezért minden stratégia **több coinon egyszerre** fut, egy portfólióként mérve.
+- **1 órás variánsok a trendkövető családban:** több kötés, de magasabb költség. A bíró 2x díj mellett is pozitív PF-et követel, ez automatikusan kiszűri, ha az 1 órás nem bírja a költséget.
+
+**Mi az ára a gyorsabb ciklusnak?** A kísérletszám. Napi 10-20 variánssal egy hónap alatt 300-600 kísérlet gyűlik. A deflated Sharpe ezt beárazza: ennyi próbálkozás után egy variánsnak már 1,5-2,0 feletti nyers Sharpe kell, hogy a DSR átengedje. **Ez helyes így.** A gyors ciklus nem a mércét lazítja, hanem több jelöltet állít a változatlan mérce elé.
 
 ### 4.2 Honnan jön az új variáns (mutációs operátorok)
 - **Paraméter-mutáció:** lookback, küszöb ±20-50%.
@@ -161,7 +176,7 @@ Napi szinten, három tengelyen: **trend** (pl. 50/200 napi átlag + ADX), **vola
 - **Rezsim-feltételezés:** ugyanaz a szabály, csak bizonyos rezsimcímke alatt aktív.
 - **Családon belüli újraírás:** az LLM átfogalmazza a szabályt (AlgoEvolve-stílus), de a sablon API-ján belül.
 
-A kutató minden héten köteles legalább egy **nem-paraméter** mutációt javasolni, különben a populáció összeszűkül egy család körül (ezt a bíró méri: ha a top 10 páronkénti korrelációja > 0,8, diverzitás-büntetés).
+A kutató minden nap köteles legalább egy **nem-paraméter** mutációt javasolni, különben a populáció összeszűkül egy család körül (ezt a bíró méri: ha a top 10 páronkénti korrelációja > 0,8, diverzitás-büntetés).
 
 ### 4.3 Meta-szint (a rendszer önmagát is javítja, de lassan)
 Havonta egyszer a kutató a **saját hipotéziseinek találati arányát** nézi: a 4 hét alatt javasolt hipotézisek hány %-a ment át a kapun, családonként. Ez a kutatói prompt egyetlen megengedett bemenete a változtatáshoz. Az AlgoEvolve ezt hívja meta-evolúciónak. Nálunk ez emberi jóváhagyással történik, nem automatikusan.
@@ -185,7 +200,11 @@ Ezek verziózottak, és változtatás csak explicit döntéssel, dátummal, indo
 | **L3 Mikro-éles (~50 USD)** | L2 ≥ 200 kötés, ≥ 2 rezsim, paper PF ≥ 1,2, realizált slippage ≤ modellezett ×1,5 | 100 kötés után élő PF < 1,0 vagy DD > paper DD ×1,5 |
 | **L4 Éles** | L3 ≥ 100 kötés, élő/paper eltérés < 30%; allokátor által elfogadott | bármikor, ha az L3 kilépési feltétel teljesül |
 
-A holdout: az utolsó **12 hónap** adat, amit az L1 visszateszt soha nem lát. A holdout-futás eredménye naplózva; egy variáns **egyszer** futhat rajta. Ha megbukik, nem lehet „kicsit módosítva” újra futtatni rajta ugyanazon a héten (ez a holdout-égetés elleni szabály).
+A holdout (döntve): az utolsó **6 hónap** adat, amit az L1 visszateszt soha nem lát. A holdout-futás eredménye naplózva; egy variáns **egyszer** futhat rajta. Ha megbukik, az ugyanabból a családból származó, 20%-nál kisebb paraméterváltozású variáns **30 napig** nem futhat rajta (holdout-égetés elleni szabály; napi ciklusnál ez szigorúbb kell legyen, mint hetinél).
+
+A 6 hónap rövidebb, mint a szokásos 12, ezért két kiegészítés van:
+- A holdout **nem rögzített naptári szakasz, hanem gördülő**: a mai naptól visszafelé 6 hónap. Ami ma holdout, az fél év múlva fejlesztési adat, és a helyére az élő paper-időszak lép, amit a stratégia valóban nem látott.
+- Az L2 paper-szakasz a második holdout. Ott a rendszer nem tud csalni, mert a jövő nem tölthető le.
 
 ---
 
@@ -254,13 +273,20 @@ Az allokátor maga is egy stratégia a bíró szemében: ugyanazok a kapuk vonat
 
 ---
 
-## 10. Nyitott kérdések, amiket neked kell eldönteni
+## 10. Döntések (2026-10-10) és ami még nyitott
 
-1. **Tőzsde a mikro-éleshez:** Hyperliquid (on-chain, SDK, testnet) vagy Bybit/Binance? Mi érhető el neked KYC/lakóhely szerint?
-2. **Holdout hossza:** 12 hónap (javaslat) vagy 6 hónap? Rövidebb = több adat a fejlesztésre, de gyengébb védelem.
-3. **Populációméret:** 30 indulásra (javaslat) vagy 50? Több egyed = magasabb DSR-küszöb, lassabb kiértékelés.
-4. **Mennyire automatikus a kutató?** Javaslat: a hipotéziseket minden héten te is látod, és jóváhagyás nélkül is futnak L1-ig, de L2-be csak emberi jóváhagyással.
-5. **A CHoCH+FVG bot forráskódja** hol van, milyen nyelven, milyen idősíkon? Ettől függ a beillesztés módja.
+| Kérdés | Döntés | Következmény |
+|---|---|---|
+| Ciklus gyakorisága | **Napi** kutató-ciklus; elő/visszaléptetés kötésszám alapján, nem naptár alapján | több jelölt, változatlan mérce; a DSR-küszöb emelkedik a kísérletszámmal |
+| Tőzsde | **Binance = adat** (hosszú történelem), **Hyperliquid = élő paper és végrehajtás** (nincs KYC, nyílt API) | funding-jeleket a Hyperliquid saját adatán újra kell igazolni L2-ben; rögzítő az első naptól |
+| Holdout | **6 hónap, gördülő** | szigorúbb holdout-égetési szabály (30 nap tiltás családon belül); az élő paper a második holdout |
+| Populáció | **50 indulásra, 100-ig bővíthető**; minden stratégia több coinon fut egy portfólióként | gyorsabban gyűlik a 200 kötés; a gép napi kiértékelési ideje a korlát, nem a tárhely |
+| Kutató automatizmusa | (még nem döntött, javaslat marad) L1-ig jóváhagyás nélkül fut, L2-be csak emberi jóváhagyással | |
+
+**Még nyitott:**
+1. **A CHoCH+FVG bot forráskódja** hol van, milyen nyelven, milyen idősíkon? Ettől függ a beillesztés módja.
+2. **Kutató automatizmusa:** elfogadod-e a fenti javaslatot (L2-be csak jóváhagyással)?
+3. **Gép:** hol fut a rendszer napi szinten? Saját gép, VPS, vagy felhő? A napi kiértékelés 50-100 egyeddel, 6 coinon, 6 év 4 órás adaton egy közepes VPS-en percek, nem órák, de futnia kell minden éjjel.
 
 ---
 
