@@ -3,7 +3,7 @@
 | Fázis | Állapot | Megjegyzés |
 |---|---|---|
 | 0 Váz | **kész** (2026-10-10) | `make verify-0` zöld a Mac minin; launchd napi futás 0-s kóddal, Telegram OK |
-| 1 Adat | nem kezdődött | |
+| 1 Adat | **kész, a rögzítő 24 órás feltételére vár** | Binance adat, hiány 0, checksum OK, `regime_daily` kész; a rögzítő 2026-10-10 03:01 óta fut, a `make verify-1` 2026-10-11 03:05 után lehet teljesen zöld |
 | 2 Szimulátor + 1 stratégia | nem kezdődött | |
 | 3 Bíró | nem kezdődött | |
 | 4 Induló populáció | nem kezdődött | |
@@ -21,3 +21,18 @@
 - `uv.lock` commitolva.
 - `make verify-0` zöld a Mac minin (6 teszt, Telegram ping elküldve); kimenet a PR #1 leírásában.
 - launchd napi futás (02:00) lefutott 0-s kilépési kóddal.
+
+## 1. fázis – mi készült (2026-10-10)
+- `evolab data update` (`data/binance_bulk.py`): havi zipek (klines, markPriceKlines, premiumIndexKlines 1h/4h/1d, fundingRate, plusz OI a `metrics` fájlokból) a data.binance.vision-ről, mindegyik `.CHECKSUM`-mal ellenőrizve; az aktuális hónap a `daily/` útvonalról, a legutolsó órák és az archívum lyukai a REST API-ból. Coinonként az első elérhető hónaptól. Fejléc nélküli és fejléces CSV, ms/µs időbélyeg kezelve. Idempotens: újrafuttatáskor csak a hiányzó zip töltődik le.
+- `evolab data gaps` / `evolab data check`: hiányriport coinonként és idősíkonként (`reports/data_gaps.csv`), ismert leállások külön (`docs/DONTESEK.md` „Ismert Binance-leállások”).
+- `evolab recorder` (`live/recorder.py`): Hyperliquid `metaAndAssetCtxs` percenként JSONL-pufferbe, óránként napi parquetbe; 4 óránként HL-gyertyák és funding. Külön launchd agent (`com.evolutiontrader.recorder`, KeepAlive), napló: `~/Library/Logs/evolutiontrader/recorder.*.log`.
+- `evolab regime` (`features/regime.py`): trend / vol / pozícionáltság a spec 2.4 szerint a `regime_daily` táblába; `tests/test_no_lookahead.py` rezsim- és indikátor-része.
+- A napi futás `data` lépése valódi: Binance-pótlás + rezsimcímkék.
+
+## 1. fázis – adat (2026-10-10)
+- 6 coin × 3 idősík: 0 hiányzó gyertya; 1 dokumentált leállás (2024-10-28 20:00 UTC, mind a 6 coin).
+- 16 236 zip, mind checksum OK.
+- `regime_daily`: 13 097 sor, mind a 9 trend×vol kombináció előfordul.
+
+## Teendő a lezáráshoz
+- 2026-10-11 03:05 után: `make verify-1` (a rögzítő 24 órás lefedettsége), a kimenet a PR-be.

@@ -49,12 +49,19 @@ def check_bars(cfg: Config, res: CheckResult, now: int | None = None) -> None:
             n_out = int(g.loc[g["kind"] == "outage", "bars"].sum())
             n_bad = int(g["bars"].sum()) - n_out
             n_mark = int(df["mark_close"].isna().sum())
+            # 0 kötéses (lapos) gyertya: a Binance így jelzi a leállást; csak listázott leállásban OK
+            empty = df.loc[df["trades"] == 0, "ts"]
+            empty_bad = [t for t in pd.to_datetime(empty, unit="ms", utc=True)
+                         if gaps.classify(None, sym, tf, t, t + pd.Timedelta(milliseconds=tf_ms(tf)), out)
+                         != "outage"]
             lag = (last_closed_open_ms(tf, now) - int(df["ts"].max())) // tf_ms(tf)
             msg = (f"{name}: {_fmt(df['ts'].min())} – {_fmt(df['ts'].max())}, {len(df):>6} gyertya, "
-                   f"hiány {n_bad + n_out} ({n_out} leállás), mark nélkül {n_mark}")
+                   f"hiány {n_bad + n_out} ({n_out} leállás), üres {len(empty)}, mark nélkül {n_mark}")
             if n_bad:
                 first = g[g["kind"] != "outage"].iloc[0]
                 res.fail(msg + f" – első valódi hiány: {first['start']:%Y-%m-%d %H:%M} ({first['kind']})")
+            elif empty_bad:
+                res.fail(msg + f" – nem listázott üres gyertya: {empty_bad[0]:%Y-%m-%d %H:%M}")
             elif lag > MAX_LAG_BARS[tf]:
                 res.fail(msg + f" – elavult, {lag} gyertya késés")
             else:
@@ -68,9 +75,11 @@ def check_funding(cfg: Config, res: CheckResult) -> None:
         if df.empty:
             res.fail(f"{sym}: nincs funding")
             continue
-        # rés: két esemény között több mint másfélszeres intervallum
+        # rés: két esemény között több mint másfélszeres intervallum; intervallumváltáskor
+        # (pl. SOL 2022-11-10: 4h -> 1h) a régi és az új közül a hosszabb számít
         gap_h = df["ts"].diff().iloc[1:] / 3_600_000
-        allowed = df["funding_interval_hours"].iloc[1:] * 1.5
+        iv = df["funding_interval_hours"]
+        allowed = pd.concat([iv.shift(1), iv], axis=1).max(axis=1).iloc[1:] * 1.5
         n_gaps = int((gap_h > allowed).sum())
         msg = f"{sym}: {len(df)} esemény, {_fmt(df['ts'].min())} – {_fmt(df['ts'].max())}, rés: {n_gaps}"
         (res.fail if n_gaps else res.ok)(msg)

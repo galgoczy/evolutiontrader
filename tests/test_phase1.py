@@ -65,6 +65,15 @@ def test_parse_funding_with_header(tmp_path):
     assert df["funding_rate"].tolist() == [0.0001, -0.0002]
 
 
+def test_parse_metrics_datetime_to_ms(tmp_path):
+    path = tmp_path / "BTCUSDT-metrics-2024-03-01.zip"
+    _zip(path, ["create_time,symbol,sum_open_interest,sum_open_interest_value",
+                "2024-03-01 00:00:00,BTCUSDT,80000.5,4.9e9", "2024-03-01 00:05:00,BTCUSDT,80010,4.91e9"])
+    df = bb.parse_metrics(path)
+    assert list(df["ts"]) == [T0, T0 + 300_000]
+    assert df["oi"].tolist() == [80000.5, 80010.0]
+
+
 # ---------------------------------------------------------------- letöltés, checksum, idempotencia
 
 
@@ -232,3 +241,28 @@ def test_fill_holes_from_api():
     assert ex.calls == 2  # két összefüggő lyuk, két kérés
     assert len(out) == 9 and T0 + 8 * H not in set(out["ts"])
     assert out.loc[out["ts"] == T0 + 3 * H, "close"].item() == 2.0
+
+
+def test_check_flags_unlisted_empty_candle(cfg):
+    from evolab.data.check import CheckResult, check_bars
+
+    n = 48
+    df = pd.DataFrame({"ts": [T0 + i * H for i in range(n)], "open": 1.0, "high": 1.0, "low": 1.0,
+                       "close": 1.0, "volume": 5.0, "quote_volume": 5.0, "trades": 3,
+                       "mark_close": 1.0, "premium_close": 0.0})
+    df.loc[10, ["volume", "trades"]] = 0
+    for sym in cfg.lab["universe"]:
+        for tf in cfg.lab["timeframes"]:
+            store.write_parquet(df, store.bars_path(cfg, sym, tf))
+    now = T0 + n * H
+    res = CheckResult()
+    check_bars(cfg, res, now=now)
+    assert any("nem listázott üres gyertya" in f for f in res.failures)
+
+    (cfg.root / "docs").mkdir()
+    (cfg.root / "docs" / "DONTESEK.md").write_text(
+        f"{gaps.OUTAGE_HEADING}\n\n| Kezdet | Vég | Coinok | M |\n|---|---|---|---|\n"
+        "| 2024-03-01 10:00 | 2024-03-01 11:00 | * | teszt |\n", encoding="utf-8")
+    res = CheckResult()
+    check_bars(cfg, res, now=now)
+    assert not any("üres gyertya" in f for f in res.failures)

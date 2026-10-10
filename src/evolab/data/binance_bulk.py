@@ -193,9 +193,10 @@ def parse_funding(path: Path) -> pd.DataFrame:
 
 def parse_metrics(path: Path) -> pd.DataFrame:
     df = _read_csv(path)
-    ts = pd.to_datetime(df[0], utc=True).astype("int64") // 10**6
+    # a felbontást rögzíteni kell: pandas 3 a szövegből µs-os dátumot ad, nem ns-osat
+    ts = pd.to_datetime(df[0], utc=True).dt.as_unit("ms").astype("int64")
     return pd.DataFrame({
-        "ts": ts.astype("int64"),
+        "ts": ts,
         "oi": pd.to_numeric(df[2]),
         "oi_value": pd.to_numeric(df[3]),
     })
@@ -366,8 +367,10 @@ def _rebuild_bars(cfg, ex, symbol, tf, plan, new, force, report) -> None:
     until = last_closed_open_ms(tf)
     old = store.read_parquet(path)
     if not force and not old.empty and not any(new.intersection(plan[(k, tf)]) for k in KLINE_KINDS):
-        if int(old["ts"].max()) >= until:
-            return  # semmi új
+        # a premium_close csak tájékoztató (forrásban is van lyuk), az nem indít újraépítést
+        complete = store.missing_bars(old["ts"], tf).empty and old["mark_close"].notna().all()
+        if int(old["ts"].max()) >= until and complete:
+            return  # semmi új, és nincs pótolnivaló lyuk
     parts = {}
     grid = None
     for kind in KLINE_KINDS:  # a klines az első: annak teljes rácsa a mark/premium rácsa is

@@ -24,3 +24,16 @@ A specifikációban nem rögzített, megvalósítás közben hozott döntések. 
 | 2026-10-10 | 1 | A rögzítő külön LaunchAgent (`com.evolutiontrader.recorder`, `KeepAlive`, `RunAtLoad`, 30 mp újraindítási késleltetés); a napló a `~/Library/Logs/evolutiontrader/recorder.*.log`. A `ops/install-launchd.sh` alapból mindkét feladatot telepíti, argumentummal csak az egyiket. | Ugyanaz az EX_CONFIG-tanulság, mint a napi futásnál. |
 | 2026-10-10 | 1 | Rögzítő elfogadás: az elmúlt 24 óra perceinek ≥95%-ára van pillanatkép, és ≥24 órája fut. | A spec „24 órája fut” feltételét mérhetővé teszi; a hálózati kiesés néhány perce belefér. |
 | 2026-10-10 | 1 | Rezsim: `date = D` címke a D napon nyíló (D+1 00:00-kor záró) napi gyertyából, a D napi fundingból és a D nap utolsó OI-jából. Stratégia a D+1 napi gyertyáihoz a D címkét használhatja. Paraméterek: ADX(14) < 20 → flat; vol-percentilis 365 napos ablak, min. 180 nap; funding-z 30 napos, küszöb ±1,5; OI 7 napos változás > 0 kell a „crowded” címkéhez. Az első ~200 nap (EMA200 bemelegedés) kimarad. | A spec 2.4 küszöbei; a nem rögzített paraméterek a `lab.yaml` `regime:` blokkjával felülírhatók. |
+| 2026-10-10 | 1 | A parquet-újraépítés csak akkor marad ki, ha nincs új zip, a sor naprakész, ÉS nincs benne hiányzó gyertya vagy üres `mark_close` (a `premium_close` tájékoztató; pl. BTC 2020-12-01 egy órája a forrásban sincs meg). Ha van lyuk, a REST API-pótlás minden futáskor újra megpróbálja. | Az első futáskor a SOL/XRP 2022-02-26..28 és 2022-04-01..02 napjai hiányoztak a havi zipből, és a korai kilépés miatt a pótlás sosem futott le. |
+| 2026-10-10 | 1 | Dátum-szövegből (metrics `create_time`) az ms-időbélyeg `dt.as_unit("ms")`-val készül, nem ns-feltételezéssel. | A pandas 3 a szöveges dátumot µs-felbontásban adja; a régi `// 10**6` másodpercet adott (1970-es dátumok az OI-ban). |
+| 2026-10-10 | 1 | A 0 kötéses (lapos, volume = 0) gyertya is hiánynak számít, hacsak nem esik egy lent listázott leállásba; a `verify-1` kiírja a darabszámukat („üres”). A gyertya az archívumi (checksummal ellenőrzött) értékével marad a parquetben. | A Binance a kereskedési szünetet nem hiányzó sorral, hanem 0 forgalmú, lapos gyertyával jelzi; az ilyen óra a szimulátorban hamis teljesülést adhatna, ezért láthatóvá kell tenni. |
+| 2026-10-10 | 1 | Funding-rés ellenőrzése intervallumváltáskor a régi és az új intervallum közül a hosszabbal számol. | SOL 2022-11-10-én 4 óráról 1 órás fundingra váltott; ez nem hiány. |
+
+## Ismert Binance-leállások
+
+Valódi tőzsdei kiesések (nem adathiba, nem hiányzó fájl). UTC, a vég kizárólagos; `*` = minden coin. A `src/evolab/data/gaps.py` ezt a táblát olvassa: új sor csak ellenőrzés után, indoklással.
+Keresés módja (2026-10-10): a 6 coin 1h/4h/1d sorában 2020-01-01-től a REST-pótlás után 0 hiányzó gyertya maradt; 0 kötéses gyertya egyetlen órában volt, mind a 6 coinra egyszerre.
+
+| Kezdet (UTC) | Vég (UTC) | Coinok | Megjegyzés |
+|---|---|---|---|
+| 2024-10-28 20:00 | 2024-10-28 21:00 | * | Az archívum havi zipje mind a 6 coinra 0 forgalmú, lapos gyertyát ad (O=H=L=C az előző zárás). A REST API ugyanerre az órára (és a 21:00-s gyertyára) eltérő, forgalmas értéket ad; a checksummal ellenőrzött archívum marad, az óra kiesésként kezelendő. Az ok nincs nyilvánosan dokumentálva. |
