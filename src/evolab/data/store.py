@@ -133,11 +133,23 @@ def funding_by_bar(funding: pd.DataFrame, tf: str) -> pd.Series:
     return funding["funding_rate"].groupby(bar.values).sum()
 
 
+def _with_oi(bars: pd.DataFrame, metrics: pd.DataFrame, step: int) -> pd.DataFrame:
+    """`oi` oszlop: az utolsó metrics-érték, aminek az ideje <= a gyertya zárása."""
+    if metrics.empty:
+        return bars.assign(oi=float("nan"))
+    left = bars.assign(close_ts=bars["ts"].astype("int64") + step).sort_values("close_ts")
+    right = metrics[["ts", "oi"]].rename(columns={"ts": "close_ts"}).astype({"close_ts": "int64"})
+    right = right.sort_values("close_ts")
+    out = pd.merge_asof(left, right, on="close_ts", direction="backward", tolerance=step)
+    return out.drop(columns="close_ts").sort_values("ts")
+
+
 def load_barframe(cfg: Config, symbols: list[str], tf: str, end_ms: int | None = None) -> pd.DataFrame:
-    """BarFrame (spec 3.): (symbol, ts) multi-index, OHLCV + mark_close + funding_rate.
+    """BarFrame (spec 3.): (symbol, ts) multi-index, OHLCV + mark_close + funding_rate + oi.
 
     `end_ms`: csak az ennél korábban NYÍLÓ gyertyák (holdout-vágás). A `funding_rate` a gyertya
-    alatt esedékes funding-események összege (0, ha nincs esemény).
+    alatt esedékes funding-események összege (0, ha nincs esemény). Az `oi` a gyertya ZÁRÁSAKOR
+    ismert utolsó open interest (Binance metrics, 5 perces); ahol nincs adat, NaN.
     """
     if _HOLDOUT_CUT_MS is not None and end_ms is not None and end_ms > _HOLDOUT_CUT_MS:
         raise HoldoutViolation(f"a holdout-ablak ({_HOLDOUT_CUT_MS} ms-tól) zárolva, kért vég: {end_ms}")
@@ -150,7 +162,7 @@ def load_barframe(cfg: Config, symbols: list[str], tf: str, end_ms: int | None =
             df = df[df["ts"] < end_ms]
         fr = funding_by_bar(read_funding(cfg, sym), tf)
         df = df.assign(funding_rate=df["ts"].map(fr).fillna(0.0).astype(float), symbol=sym)
-        frames.append(df)
+        frames.append(_with_oi(df, read_metrics(cfg, sym), tf_ms(tf)))
     if not frames:
         raise FileNotFoundError(f"Nincs {tf} gyertya a {symbols} coinokra (evolab data update).")
     out = pd.concat(frames, ignore_index=True)

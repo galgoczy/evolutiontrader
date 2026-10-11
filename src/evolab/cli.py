@@ -227,6 +227,27 @@ def cmd_judge(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_population(args: argparse.Namespace) -> int:
+    from evolab.evolve import population
+
+    cfg = load_config()
+    if args.action == "seed":
+        population.seed(cfg, log=lambda m: print(m, flush=True))
+    table, fam = population.report(cfg)
+    if table.empty:
+        print("Nincs még L1-ítélet a ledgerben (evolab population seed).")
+        return 1
+    path = population.write_report(cfg, table, fam)
+    print("L1 családonként:")
+    print(fam.to_string(index=False))
+    print(f"Összesen: {int(fam['passed'].sum())}/{int(fam['variants'].sum())} variáns ment át L1-en.")
+    cols = ["strategy_id", "result", "trades", "pf_2x", "max_dd_pct", "oos_is", "dsr", "pbo", "regimes_pos",
+            f"regimes_pos_min{population.REGIME_MIN_TRADES_PROBE}"]
+    print(table[cols].to_string(index=False, float_format=lambda v: f"{v:.2f}"))
+    print(f"Riport: {path}")
+    return 0
+
+
 def cmd_recorder(args: argparse.Namespace) -> int:
     from evolab.live import recorder
 
@@ -287,6 +308,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--strategy", required=True)
     sp.add_argument("--holdout", action="store_true", help="a holdout-ablak egyszeri futtatása (burn-szabállyal)")
     sp.set_defaults(func=cmd_judge)
+
+    sp = sub.add_parser("population", help="induló populáció: L1-ítélet minden variánsra (seed) vagy riport")
+    sp.add_argument("action", choices=["seed", "report"])
+    sp.set_defaults(func=cmd_population)
 
     sp = sub.add_parser("daily", help="napi futás (launchd hívja 02:00-kor)")
     sp.add_argument("--step", choices=DAILY_STEPS, default=None, help="csak egy lépés futtatása")

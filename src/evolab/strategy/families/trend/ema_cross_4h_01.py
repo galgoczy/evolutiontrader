@@ -1,5 +1,6 @@
 """
 family: trend
+hypothesis_id: H-seed-trend-ema
 hypothesis: >
   A kriptó perpetual piacokon az idősoros momentum a legjobban dokumentált anomália: a hozamok
   napos-hetes távon pozitívan autokorrelálnak, mert az információ lassan terjed, a tőkeáttétes

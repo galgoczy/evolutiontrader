@@ -1,5 +1,5 @@
 # EvolutionTrader - fázis-ellenőrzések. Használat: make verify-0
-.PHONY: help setup test verify-0 verify-1 verify-2 verify-3 status ping daily data recorder-install
+.PHONY: help setup test verify-0 verify-1 verify-2 verify-3 verify-4 status ping daily data recorder-install
 
 help:
 	@echo "make setup     - függőségek telepítése (uv sync)"
@@ -8,6 +8,7 @@ help:
 	@echo "make verify-1  - 1. fázis (adat) elfogadási ellenőrzés"
 	@echo "make verify-2  - 2. fázis (szimulátor + 1 stratégia) elfogadási ellenőrzés"
 	@echo "make verify-3  - 3. fázis (bíró) elfogadási ellenőrzés"
+	@echo "make verify-4  - 4. fázis (induló populáció, L1-ítéletek) elfogadási ellenőrzés"
 	@echo "make data      - Binance adat frissítése + rezsimcímkék"
 	@echo "make recorder-install - Hyperliquid rögzítő launchd-telepítése"
 	@echo "make status    - állapot"
@@ -85,3 +86,14 @@ verify-3:
 	@echo "== 4/4 teljes L1 ítélet egy variánsra, időméréssel (< 2 perc) =="
 	/usr/bin/time -p uv run evolab judge --strategy trend-ema-cross-4h-01
 	@echo "== 3. fázis: KÉSZ =="
+
+verify-4:
+	@echo "== 1/3 tesztek (populáció, lookahead mind a 40 variánsra) =="
+	uv run pytest
+	@echo "== 2/3 induló populáció: alapfuttatás + L1-ítélet minden variánsra =="
+	uv run evolab population seed
+	@echo "== 3/3 ledger: ítéletek és kísérletek száma =="
+	uv run python -c "from evolab.config import load_config; from evolab.db import connect; \
+	c = connect(load_config().db_path); \
+	[print(f'  {k or \"-\":<16} {n:>5}') for k, n in c.execute('SELECT gate_result, COUNT(*) FROM trials GROUP BY 1 ORDER BY 2 DESC')]"
+	@echo "== 4. fázis: KÉSZ =="

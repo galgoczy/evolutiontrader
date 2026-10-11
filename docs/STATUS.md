@@ -5,8 +5,8 @@
 | 0 Váz | **kész** (2026-10-10) | `make verify-0` zöld a Mac minin; launchd napi futás 0-s kóddal, Telegram OK |
 | 1 Adat | **kész** (2026-10-11) | `make verify-1` zöld: hiány 0, checksum OK, `regime_daily` 13 103 sor, rögzítő 24 órája fut 99,9%-os lefedettséggel |
 | 2 Szimulátor + 1 stratégia | **kész** (2026-10-11) | `make verify-2` zöld; PR #3 merge-ölve |
-| 3 Bíró | **kész, emberi átnézésre vár** (2026-10-11) | `make verify-3` zöld; védett `judge/` csomag, PR #4 |
-| 4 Induló populáció | nem kezdődött | |
+| 3 Bíró | **kész** (2026-10-11) | `make verify-3` zöld; PR #4 merge-ölve (emberi jóváhagyással) |
+| 4 Induló populáció | **kész** (2026-10-11) | `make verify-4` zöld; 40 variáns ítélettel, 0 ment át L1-en; PR #5 |
 | 5 Élő paper | nem kezdődött | |
 | 6 Hurok | nem kezdődött | |
 | 7 Stabilizálás | nem kezdődött | |
@@ -57,3 +57,17 @@
 
 ## 3. fázis – első ítélet (2026-10-11)
 - `trend-ema-cross-4h-01`: **FAIL** 4 mp alatt. Bukott kapuk: PF 2x költségnél 1,07 (< 1,3), OOS/IS −0,01 (< 0,5), DSR 0,938 (≤ 0,95), PBO nem számolható (1 variáns a családban). Átment: kötésszám 957, max DD 7%, 5 pozitív rezsim, paraméter-stabilitás.
+
+## 4. fázis – induló populáció (2026-10-11)
+- 40 variáns az 5 családból (`strategy/families/`), közös jelépítőkkel (`strategy/lib.py`); a BarFrame-ben OI is van.
+- `evolab population seed|report`: alapfuttatás + L1-ítélet minden variánsra, riport `reports/phase4_l1.md`.
+- Eredmény: **0/40 ment át L1-en** (trend 0/14, volbreak 0/6, relstrength 0/6, positioning 0/8, rangerev 0/6).
+  - Legközelebb: `volbreak-squeeze-4h-04` – csak a „PF 2x költségnél ≥ 1,3” kapun bukik (1,20); DSR 0,98, PBO 0,04, OOS/IS 1,07, max DD 8,6%.
+  - A trend-család 4h EMA-variánsai 1x költségnél nyereségesek (PF 1,1–1,25), de 2x költségnél ~1,0, és a DSR 0,6 körül.
+  - A rangerev, relstrength és a kontrariánus pozícionáltság egyértelműen veszteséges.
+- A modellezett slippage a díj 2,5–2,9-szerese (az ATR-arányos tag miatt): a költségmodell a legerősebb tényező.
+
+## Nyitott kérdések (felhasználói döntés)
+1. Rezsim-kapu: legyen-e kombinációnkénti minimális kötésszám (pl. 10)? A riport `regimes_pos_min10` oszlopa mutatja a hatást: a rangerev-nél 2-3 pozitív kombináció 0-ra esne, a többinél alig változik.
+2. „2x költség” kapu: a díjat és a slippage-et is duplázza (most), vagy csak a díjat (a spec szövege „2x díj”)? Csak díjjal a `volbreak-squeeze-4h-04` átmenne L1-en.
+3. Slippage-modell (`lab.yaml`: `slippage_atr_mult: 0.05`): 4h gyertyán ~0,1% oldalanként; a Hyperliquid paper (5. fázis) méri majd a valódit.
