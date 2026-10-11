@@ -67,7 +67,7 @@
   - A rangerev, relstrength és a kontrariánus pozícionáltság egyértelműen veszteséges.
 - A modellezett slippage a díj 2,5–2,9-szerese (az ATR-arányos tag miatt): a költségmodell a legerősebb tényező.
 
-## Nyitott kérdések (felhasználói döntés)
-1. Rezsim-kapu: legyen-e kombinációnkénti minimális kötésszám (pl. 10)? A riport `regimes_pos_min10` oszlopa mutatja a hatást: a rangerev-nél 2-3 pozitív kombináció 0-ra esne, a többinél alig változik.
-2. „2x költség” kapu: a díjat és a slippage-et is duplázza (most), vagy csak a díjat (a spec szövege „2x díj”)? Csak díjjal a `volbreak-squeeze-4h-04` átmenne L1-en.
-3. Slippage-modell (`lab.yaml`: `slippage_atr_mult: 0.05`): 4h gyertyán ~0,1% oldalanként; a Hyperliquid paper (5. fázis) méri majd a valódit.
+## Döntések és nyitott kérdés (2026-10-11)
+1. „2x költség” kapu: díj + slippage duplázva – **eldöntve, marad**.
+2. Slippage-modell: változatlan, az 5. fázis paper-mérése után újra – **eldöntve**.
+3. Rezsim-kapu kötésszám-minimuma: **nyitott**. Újra elő kerül, ha egy variáns csak egy vékony (< 10 kötéses) pozitív kombináció miatt menne át a rezsim-kapun (a riport `regimes_pos_min10` oszlopa figyeli).
