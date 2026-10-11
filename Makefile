@@ -1,11 +1,12 @@
 # EvolutionTrader - fázis-ellenőrzések. Használat: make verify-0
-.PHONY: help setup test verify-0 verify-1 status ping daily data recorder-install
+.PHONY: help setup test verify-0 verify-1 verify-2 status ping daily data recorder-install
 
 help:
 	@echo "make setup     - függőségek telepítése (uv sync)"
 	@echo "make test      - tesztek futtatása"
 	@echo "make verify-0  - 0. fázis elfogadási ellenőrzés"
 	@echo "make verify-1  - 1. fázis (adat) elfogadási ellenőrzés"
+	@echo "make verify-2  - 2. fázis (szimulátor + 1 stratégia) elfogadási ellenőrzés"
 	@echo "make data      - Binance adat frissítése + rezsimcímkék"
 	@echo "make recorder-install - Hyperliquid rögzítő launchd-telepítése"
 	@echo "make status    - állapot"
@@ -57,3 +58,18 @@ verify-1:
 	@echo "== 5/5 adatminőség, checksum, regime_daily, rögzítő =="
 	uv run evolab data check
 	@echo "== 1. fázis: KÉSZ =="
+
+verify-2:
+	@echo "== 1/4 szimulátor-tesztek (test_sim_*) =="
+	uv run pytest -v -k "sim_" tests/test_phase2.py
+	@echo "== 2/4 összes teszt (lookahead is) =="
+	uv run pytest
+	@echo "== 3/4 visszateszt: trend-ema-cross-4h-01 (valódi adat, holdout nélkül) =="
+	uv run evolab backtest --strategy trend-ema-cross-4h-01
+	@echo "== 4/4 kimeneti parquet fájlok és ledger-sor =="
+	uv run python -c "from evolab.config import load_config; from evolab.db import connect; \
+	import pandas as pd, pathlib; cfg = load_config(); \
+	r = connect(cfg.db_path).execute('SELECT trial_id, strategy_id, judge_version, created_at FROM trials ORDER BY created_at DESC LIMIT 1').fetchone(); \
+	print('ledger:', dict(r)); d = cfg.path('data') / 'backtests' / r['strategy_id'] / r['trial_id']; \
+	[print(f'  {p.name:<17} {len(pd.read_parquet(p)):>7} sor') for p in sorted(d.glob('*.parquet'))]"
+	@echo "== 2. fázis: KÉSZ =="

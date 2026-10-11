@@ -6,6 +6,8 @@ import pytest
 
 from evolab.features import indicators as ind
 from evolab.features import regime
+from evolab.strategy import registry
+from evolab.strategy.base import align_regime
 
 DAY = 86_400_000
 T0 = int(pd.Timestamp("2021-01-01", tz="UTC").timestamp() * 1000)
@@ -87,6 +89,31 @@ def test_indicators_ignore_future(fn):
     pd.testing.assert_series_equal(fn(daily).iloc[:cut], fn(shocked).iloc[:cut])
 
 
-@pytest.mark.xfail(reason="stratégiajel a 2. fázisban készül (strategy/base.py)", strict=True)
-def test_strategy_signals_ignore_future():
-    from evolab.strategy import base  # noqa: F401
+def _strategy_bars(n=900, seed=3):
+    rng = np.random.default_rng(seed)
+    frames = []
+    for k, sym in enumerate(["BTCUSDT", "ETHUSDT"]):
+        close = 100 * (k + 1) * np.exp(np.cumsum(0.001 + 0.02 * rng.standard_normal(n)))
+        o = np.concatenate([[close[0]], close[:-1]])
+        frames.append(pd.DataFrame({"symbol": sym, "ts": T0 + 4 * 3_600_000 * np.arange(n), "open": o,
+                                    "high": np.maximum(o, close) * 1.004, "low": np.minimum(o, close) * 0.996,
+                                    "close": close, "volume": 1.0, "mark_close": close, "funding_rate": 0.0}))
+    return pd.concat(frames).set_index(["symbol", "ts"]).sort_index()
+
+
+@pytest.mark.parametrize("strategy_id", list(registry.discover()))
+@pytest.mark.parametrize("cut", [500, 800])
+def test_strategy_signals_ignore_future(strategy_id, cut):
+    """Minden regisztrált variáns: a `cut` utáni gyertyák durva módosítása nem változtat korábbi jelet."""
+    strat = registry.load(strategy_id)
+    bars = _strategy_bars()
+    cut_ts = T0 + 4 * 3_600_000 * cut
+    shocked = bars.copy()
+    fut = shocked.index.get_level_values("ts") >= cut_ts
+    shocked.loc[fut, ["open", "high", "low", "close", "mark_close"]] *= 2.5
+    shocked.loc[fut, "funding_rate"] = 0.01
+    a = strat.signals(bars, align_regime(pd.DataFrame(), bars.index))
+    b = strat.signals(shocked, align_regime(pd.DataFrame(), shocked.index))
+    past = a.index.get_level_values("ts") < cut_ts
+    pd.testing.assert_frame_equal(a[past], b[past])
+    assert not a[~past].equals(b[~past])  # a sokk a jövőre hat, különben a teszt nem bizonyít semmit

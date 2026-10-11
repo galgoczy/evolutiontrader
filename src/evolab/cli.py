@@ -175,6 +175,25 @@ def cmd_regime(args: argparse.Namespace) -> int:
     return 0 if n else 1
 
 
+def cmd_backtest(args: argparse.Namespace) -> int:
+    from evolab import backtest
+    from evolab.strategy import registry
+
+    cfg = load_config()
+    if args.list or not args.strategy:
+        for sid, path in registry.discover().items():
+            print(f"{sid}  ({path.relative_to(registry.FAMILIES_DIR)})")
+        return 0
+    bt = backtest.run(cfg, args.strategy, cost_mult=args.cost_mult)
+    s = bt.result.summary()
+    print(f"Visszateszt: {bt.strategy_id} | trial {bt.trial_id} | holdout-ablak {bt.holdout_start:%Y-%m-%d}-tól kizárva")
+    for k, v in s.items():
+        print(f"  {k:<17}: {v}")
+    print(f"  {'trades_hash':<17}: {bt.result.trades_hash()[:16]}")
+    print(f"Kimenet: {bt.out_dir}")
+    return 0
+
+
 def cmd_recorder(args: argparse.Namespace) -> int:
     from evolab.live import recorder
 
@@ -222,6 +241,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("recorder", help="Hyperliquid élő rögzítő (launchd tartja életben)")
     sp.add_argument("--once", action="store_true", help="egyetlen pillanatkép + gyertya-szinkron")
     sp.set_defaults(func=cmd_recorder)
+
+    sp = sub.add_parser("backtest", help="visszateszt egy stratégiára (a holdout-ablak mindig kizárva)")
+    sp.add_argument("--strategy", help="stratégia-azonosító, pl. trend-ema-cross-4h-01")
+    sp.add_argument("--no-holdout", action="store_true",
+                    help="a holdout-ablak kizárása (ez az alapértelmezés; a holdout a bíró kapujánál fut)")
+    sp.add_argument("--cost-mult", type=float, default=1.0, help="díj- és slippage-szorzó (1, 2, 3)")
+    sp.add_argument("--list", action="store_true", help="regisztrált stratégiák listája")
+    sp.set_defaults(func=cmd_backtest)
 
     sp = sub.add_parser("daily", help="napi futás (launchd hívja 02:00-kor)")
     sp.add_argument("--step", choices=DAILY_STEPS, default=None, help="csak egy lépés futtatása")

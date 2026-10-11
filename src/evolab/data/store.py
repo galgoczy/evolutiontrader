@@ -84,3 +84,40 @@ def missing_bars(ts: pd.Series, tf: str) -> pd.DatetimeIndex:
     grid = pd.RangeIndex(int(have.min()), int(have.max()) + step, step)
     gaps = grid.difference(have)
     return pd.to_datetime(gaps, unit="ms", utc=True)
+
+
+def funding_by_bar(funding: pd.DataFrame, tf: str) -> pd.Series:
+    """Funding-események a gyertyához rendelve, amelyiknek a ZÁRÁSA az esemény ideje.
+
+    Az esemény `f` időpontja (a Binance néhány ms késéssel írja, ezért mp-re kerekítve) a
+    (nyitó, zárás] intervallumba eső gyertyához tartozik: így a ráta a gyertya zárásakor ismert,
+    és a szimulátor az akkor tartott pozícióra számolja el.
+    """
+    if funding.empty:
+        return pd.Series(dtype=float)
+    step = tf_ms(tf)
+    f = (funding["ts"].astype("int64") + 500) // 1000 * 1000
+    bar = (f - 1) // step * step
+    return funding["funding_rate"].groupby(bar.values).sum()
+
+
+def load_barframe(cfg: Config, symbols: list[str], tf: str, end_ms: int | None = None) -> pd.DataFrame:
+    """BarFrame (spec 3.): (symbol, ts) multi-index, OHLCV + mark_close + funding_rate.
+
+    `end_ms`: csak az ennél korábban NYÍLÓ gyertyák (holdout-vágás). A `funding_rate` a gyertya
+    alatt esedékes funding-események összege (0, ha nincs esemény).
+    """
+    frames = []
+    for sym in symbols:
+        df = read_bars(cfg, sym, tf)
+        if df.empty:
+            continue
+        if end_ms is not None:
+            df = df[df["ts"] < end_ms]
+        fr = funding_by_bar(read_funding(cfg, sym), tf)
+        df = df.assign(funding_rate=df["ts"].map(fr).fillna(0.0).astype(float), symbol=sym)
+        frames.append(df)
+    if not frames:
+        raise FileNotFoundError(f"Nincs {tf} gyertya a {symbols} coinokra (evolab data update).")
+    out = pd.concat(frames, ignore_index=True)
+    return out.set_index(["symbol", "ts"]).sort_index()
