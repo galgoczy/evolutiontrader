@@ -4,7 +4,7 @@
 |---|---|---|
 | 0 Váz | **kész** (2026-10-10) | `make verify-0` zöld a Mac minin; launchd napi futás 0-s kóddal, Telegram OK |
 | 1 Adat | **kész** (2026-10-11) | `make verify-1` zöld: hiány 0, checksum OK, `regime_daily` 13 103 sor, rögzítő 24 órája fut 99,9%-os lefedettséggel |
-| 2 Szimulátor + 1 stratégia | nem kezdődött | |
+| 2 Szimulátor + 1 stratégia | **kész** (2026-10-11) | `make verify-2` zöld; PR #3 |
 | 3 Bíró | nem kezdődött | |
 | 4 Induló populáció | nem kezdődött | |
 | 5 Élő paper | nem kezdődött | |
@@ -38,3 +38,13 @@
 - `make verify-1` zöld a Mac minin (03:16): 38 teszt zöld (1 xfail: stratégiajel, 2. fázis), 0 hiányzó gyertya, 16 296/16 296 zip checksum OK, `regime_daily` 13 103 sor (9/9 trend×vol kombináció), rögzítő 24,3 órája fut, 1439/1440 perc (99,9%), napló hibamentes.
 - A 02:00-s napi futás már a valódi `data` lépéssel ment (új napi zipek letöltve).
 - Kimenet a PR #2 leírásában.
+
+## 2. fázis – mi készült (2026-10-11)
+- `strategy/base.py` (sablon: BarFrame, RegimeFrame előző napi címkével, SignalFrame), `strategy/registry.py` (YAML fejléc ellenőrzése, hypothesis ≥ 200 karakter).
+- Első variáns: `strategy/families/trend/ema_cross_4h_01.py` (EMA 20/100, ATR-követő stop).
+- `sim/`: `engine.py` (portfólió-szimulátor: következő nyitón teljesülés, stop/TP konzervatív sorrenddel, mark áras equity), `costs.py` (taker díj + ATR-arányos slippage, költségszorzó), `funding.py`, `risk.py` (vol-cél, 2x bruttó, 50%/coin, megszakítók).
+- `evolab backtest --strategy <id>`: holdout-ablak kizárva, `trades/equity/exposure/events` parquet, `trials` sor.
+- Tesztek: `test_sim_known_answer` (5 kézzel számolt kötés díjjal és fundinggal), `test_sim_deterministic`, stop/rés/plafon/megszakítók, registry, `test_no_lookahead` stratégia-része (minden regisztrált variánsra).
+
+## 2. fázis – első visszateszt (2026-10-11, tájékoztató, nem bírói ítélet)
+- `trend-ema-cross-4h-01`, 2020-01 – 2026-04 (holdout kizárva): 957 kötés, +33,1%, max DD 7,0% (mark), PF 1,25, díj 520 USD, funding −351 USD, 139 megszakító-szünet, státusz ok.
