@@ -4,8 +4,8 @@
 |---|---|---|
 | 0 Váz | **kész** (2026-10-10) | `make verify-0` zöld a Mac minin; launchd napi futás 0-s kóddal, Telegram OK |
 | 1 Adat | **kész** (2026-10-11) | `make verify-1` zöld: hiány 0, checksum OK, `regime_daily` 13 103 sor, rögzítő 24 órája fut 99,9%-os lefedettséggel |
-| 2 Szimulátor + 1 stratégia | **kész** (2026-10-11) | `make verify-2` zöld; PR #3 |
-| 3 Bíró | nem kezdődött | |
+| 2 Szimulátor + 1 stratégia | **kész** (2026-10-11) | `make verify-2` zöld; PR #3 merge-ölve |
+| 3 Bíró | **kész, emberi átnézésre vár** (2026-10-11) | `make verify-3` zöld; védett `judge/` csomag, PR #4 |
 | 4 Induló populáció | nem kezdődött | |
 | 5 Élő paper | nem kezdődött | |
 | 6 Hurok | nem kezdődött | |
@@ -48,3 +48,12 @@
 
 ## 2. fázis – első visszateszt (2026-10-11, tájékoztató, nem bírói ítélet)
 - `trend-ema-cross-4h-01`, 2020-01 – 2026-04 (holdout kizárva): 957 kötés, +33,1%, max DD 7,0% (mark), PF 1,25, díj 520 USD, funding −351 USD, 139 megszakító-szünet, státusz ok.
+
+## 3. fázis – mi készült (2026-10-11)
+- `judge/` (VÉDETT): `metrics.py`, `walkforward.py`, `cpcv.py`, `pbo.py`, `dsr.py`, `ledger.py`, `gates.py`, `holdout.py`, `evaluate.py`. A `config/judge.yaml` változatlan (1-es verzió).
+- Holdout-izoláció a tár szintjén (`store.holdout_locked`).
+- `evolab judge --strategy <id>`: teljes L1 ítélet (1x/2x/3x költség, walk-forward, paraméter-stabilitás, PBO, DSR, kapuk), egy ledger-sor; `--holdout`: egyszeri holdout-futás burn-szabállyal.
+- Tesztek: `test_judge_rejects_overfit`, `test_judge_accepts_simple`, `test_judge_rejects_random_walk`, `test_holdout_isolation`, holdout egyszeri/burn, DSR/PBO/CPCV/walk-forward/kapuk egységtesztek.
+
+## 3. fázis – első ítélet (2026-10-11)
+- `trend-ema-cross-4h-01`: **FAIL** 4 mp alatt. Bukott kapuk: PF 2x költségnél 1,07 (< 1,3), OOS/IS −0,01 (< 0,5), DSR 0,938 (≤ 0,95), PBO nem számolható (1 variáns a családban). Átment: kötésszám 957, max DD 7%, 5 pozitív rezsim, paraméter-stabilitás.

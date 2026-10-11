@@ -1,5 +1,5 @@
 # EvolutionTrader - fázis-ellenőrzések. Használat: make verify-0
-.PHONY: help setup test verify-0 verify-1 verify-2 status ping daily data recorder-install
+.PHONY: help setup test verify-0 verify-1 verify-2 verify-3 status ping daily data recorder-install
 
 help:
 	@echo "make setup     - függőségek telepítése (uv sync)"
@@ -7,6 +7,7 @@ help:
 	@echo "make verify-0  - 0. fázis elfogadási ellenőrzés"
 	@echo "make verify-1  - 1. fázis (adat) elfogadási ellenőrzés"
 	@echo "make verify-2  - 2. fázis (szimulátor + 1 stratégia) elfogadási ellenőrzés"
+	@echo "make verify-3  - 3. fázis (bíró) elfogadási ellenőrzés"
 	@echo "make data      - Binance adat frissítése + rezsimcímkék"
 	@echo "make recorder-install - Hyperliquid rögzítő launchd-telepítése"
 	@echo "make status    - állapot"
@@ -73,3 +74,14 @@ verify-2:
 	print('ledger:', dict(r)); d = cfg.path('data') / 'backtests' / r['strategy_id'] / r['trial_id']; \
 	[print(f'  {p.name:<17} {len(pd.read_parquet(p)):>7} sor') for p in sorted(d.glob('*.parquet'))]"
 	@echo "== 2. fázis: KÉSZ =="
+
+verify-3:
+	@echo "== 1/4 bíró-, ledger- és holdout-tesztek =="
+	uv run pytest -v -k "judge or ledger or holdout" tests/
+	@echo "== 2/4 összes teszt =="
+	uv run pytest
+	@echo "== 3/4 védett fájlok: a judge.yaml változatlan (verzió + changelog) =="
+	uv run python -c "from evolab.config import load_config; c = load_config(); print('judge.yaml verzió:', c.judge_version); [print('  ', e) for e in c.judge['changelog']]"
+	@echo "== 4/4 teljes L1 ítélet egy variánsra, időméréssel (< 2 perc) =="
+	/usr/bin/time -p uv run evolab judge --strategy trend-ema-cross-4h-01
+	@echo "== 3. fázis: KÉSZ =="
