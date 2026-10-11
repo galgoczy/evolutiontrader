@@ -1,9 +1,9 @@
 # Adat és állapot (Time Machine / rsync menti)
-data/
-reports/
-logs/
-hypotheses/
-STOP
+/data/
+/reports/
+/logs/
+/hypotheses/
+/STOP
 
 # Titkok
 .env
