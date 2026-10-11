@@ -3,7 +3,7 @@
 | Fázis | Állapot | Megjegyzés |
 |---|---|---|
 | 0 Váz | **kész** (2026-10-10) | `make verify-0` zöld a Mac minin; launchd napi futás 0-s kóddal, Telegram OK |
-| 1 Adat | **kész, a rögzítő 24 órás feltételére vár** | Binance adat, hiány 0, checksum OK, `regime_daily` kész; a rögzítő 2026-10-10 03:01 óta fut, a `make verify-1` 2026-10-11 03:05 után lehet teljesen zöld |
+| 1 Adat | **kész** (2026-10-11) | `make verify-1` zöld: hiány 0, checksum OK, `regime_daily` 13 103 sor, rögzítő 24 órája fut 99,9%-os lefedettséggel |
 | 2 Szimulátor + 1 stratégia | nem kezdődött | |
 | 3 Bíró | nem kezdődött | |
 | 4 Induló populáció | nem kezdődött | |
@@ -34,5 +34,7 @@
 - 16 236 zip, mind checksum OK.
 - `regime_daily`: 13 097 sor, mind a 9 trend×vol kombináció előfordul.
 
-## Teendő a lezáráshoz
-- 2026-10-11 03:05 után: `make verify-1` (a rögzítő 24 órás lefedettsége), a kimenet a PR-be.
+## 1. fázis – lezárás (2026-10-11)
+- `make verify-1` zöld a Mac minin (03:16): 38 teszt zöld (1 xfail: stratégiajel, 2. fázis), 0 hiányzó gyertya, 16 296/16 296 zip checksum OK, `regime_daily` 13 103 sor (9/9 trend×vol kombináció), rögzítő 24,3 órája fut, 1439/1440 perc (99,9%), napló hibamentes.
+- A 02:00-s napi futás már a valódi `data` lépéssel ment (új napi zipek letöltve).
+- Kimenet a PR #2 leírásában.
