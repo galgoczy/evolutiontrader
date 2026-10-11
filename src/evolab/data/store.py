@@ -14,6 +14,7 @@ Elrendezés a data/ alatt:
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
@@ -59,8 +60,39 @@ def write_parquet(df: pd.DataFrame, path: Path) -> None:
     os.replace(tmp, path)
 
 
+# ---------------------------------------------------------------- holdout-izoláció (spec 9.)
+# A bíró az in-sample értékelést `holdout_locked(cut)` alatt futtatja: ilyenkor a tár egyetlen
+# olvasója sem ad vissza a `cut` utáni időbélyeget, és egy kifejezetten oda mutató kérés hibát dob.
+_HOLDOUT_CUT_MS: int | None = None
+
+
+class HoldoutViolation(PermissionError):
+    pass
+
+
+@contextmanager
+def holdout_locked(cut_ms: int):
+    global _HOLDOUT_CUT_MS
+    prev = _HOLDOUT_CUT_MS
+    _HOLDOUT_CUT_MS = int(cut_ms) if prev is None else min(prev, int(cut_ms))  # egymásba ágyazva a szigorúbb
+    try:
+        yield
+    finally:
+        _HOLDOUT_CUT_MS = prev
+
+
+def holdout_cut_ms() -> int | None:
+    return _HOLDOUT_CUT_MS
+
+
+def _guard(df: pd.DataFrame) -> pd.DataFrame:
+    if _HOLDOUT_CUT_MS is None or df.empty or "ts" not in df:
+        return df
+    return df[df["ts"] < _HOLDOUT_CUT_MS].reset_index(drop=True)
+
+
 def read_parquet(path: Path) -> pd.DataFrame:
-    return pd.read_parquet(path) if path.exists() else pd.DataFrame()
+    return _guard(pd.read_parquet(path)) if path.exists() else pd.DataFrame()
 
 
 def read_bars(cfg: Config, symbol: str, tf: str) -> pd.DataFrame:
@@ -107,6 +139,8 @@ def load_barframe(cfg: Config, symbols: list[str], tf: str, end_ms: int | None =
     `end_ms`: csak az ennél korábban NYÍLÓ gyertyák (holdout-vágás). A `funding_rate` a gyertya
     alatt esedékes funding-események összege (0, ha nincs esemény).
     """
+    if _HOLDOUT_CUT_MS is not None and end_ms is not None and end_ms > _HOLDOUT_CUT_MS:
+        raise HoldoutViolation(f"a holdout-ablak ({_HOLDOUT_CUT_MS} ms-tól) zárolva, kért vég: {end_ms}")
     frames = []
     for sym in symbols:
         df = read_bars(cfg, sym, tf)

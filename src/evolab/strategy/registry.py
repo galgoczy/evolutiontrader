@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +36,10 @@ class LoadedStrategy:
 
     def signals(self, bars: BarFrame, regime: RegimeFrame) -> SignalFrame:
         return validate_signals(self._fn(bars, regime, dict(self.meta.params)), bars)
+
+    def with_params(self, params: dict[str, Any]) -> "LoadedStrategy":
+        """Ugyanaz a variáns más paraméterekkel (paraméter-stabilitás, rács)."""
+        return LoadedStrategy(meta=replace(self.meta, params=dict(params)), _fn=self._fn, path=self.path)
 
 
 def strategy_id(path: Path) -> str:

@@ -194,6 +194,39 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_judge(args: argparse.Namespace) -> int:
+    from evolab.judge import holdout
+    from evolab.judge.evaluate import evaluate_l1
+
+    cfg = load_config()
+    if args.holdout:
+        try:
+            out = holdout.run_holdout(cfg, args.strategy)
+        except holdout.HoldoutRefused as e:
+            print(f"Holdout elutasítva: {e}")
+            return 1
+        print(f"Holdout {args.strategy}: {'ÁTMENT' if out['passed'] else 'BUKOTT'} | {out['window_start']} – "
+              f"{out['window_end']} | kötés {out['trades']}, PF {out['profit_factor']:.2f}")
+        return 0 if out["passed"] else 1
+    ev = evaluate_l1(cfg, args.strategy)
+    m, wf, d, p = ev["metrics"], ev["walkforward"], ev["dsr"], ev["pbo"]
+    print(f"L1 ítélet: {args.strategy} -> {ev['gate_result'].upper()} | trial {ev['trial_id']} | {ev['elapsed_s']} mp")
+    print(f"  adat: holdout-ablak {ev['holdout_start']}-tól kizárva, {m['years']:.1f} év")
+    print(f"  kötés {m['trades']}, PF 1x/2x/3x {ev['pf_1x']:.2f}/{ev['pf_2x']:.2f}/{ev['pf_3x']:.2f}, "
+          f"max DD {100 * m['max_dd']:.1f}%, Sharpe {m['sharpe']:.2f}, Sortino {m['sortino']:.2f}, "
+          f"Calmar {m['calmar']:.2f}")
+    print(f"  walk-forward: {wf['windows']} ablak, OOS/IS {wf['oos_is_ratio']:.2f}")
+    print(f"  DSR {d['dsr']:.3f} (SR {d['sr']:.4f} vs SR0 {d['sr0']:.4f}, kísérlet {d['n_trials']}, "
+          f"hatékony {d['n_eff']:.1f})")
+    print(f"  PBO {'n/a' if p['pbo'] is None else format(p['pbo'], '.2f')} ({p['variants']} variáns)")
+    pos = sorted(k for k, v in m["regime_ev"].items() if v["ev"] > 0)
+    print(f"  pozitív rezsimek ({len(pos)}): {', '.join(pos) or '-'}")
+    print(f"  paraméter-stabilitás: {ev['param_stability']['results']}")
+    for f in ev["gate_failures"]:
+        print(f"  BUKOTT KAPU: {f}")
+    return 0
+
+
 def cmd_recorder(args: argparse.Namespace) -> int:
     from evolab.live import recorder
 
@@ -249,6 +282,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--cost-mult", type=float, default=1.0, help="díj- és slippage-szorzó (1, 2, 3)")
     sp.add_argument("--list", action="store_true", help="regisztrált stratégiák listája")
     sp.set_defaults(func=cmd_backtest)
+
+    sp = sub.add_parser("judge", help="L1 bírói ítélet egy stratégiára (vagy --holdout: egyszeri holdout-futás)")
+    sp.add_argument("--strategy", required=True)
+    sp.add_argument("--holdout", action="store_true", help="a holdout-ablak egyszeri futtatása (burn-szabállyal)")
+    sp.set_defaults(func=cmd_judge)
 
     sp = sub.add_parser("daily", help="napi futás (launchd hívja 02:00-kor)")
     sp.add_argument("--step", choices=DAILY_STEPS, default=None, help="csak egy lépés futtatása")
