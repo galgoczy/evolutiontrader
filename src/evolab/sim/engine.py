@@ -45,6 +45,7 @@ class Result:
     initial_capital: float
     skipped_entries: int = 0
     meta: dict = field(default_factory=dict)
+    open_positions: pd.DataFrame = field(default_factory=pd.DataFrame)
 
     def trades_hash(self) -> str:
         """A kötéslista ujjlenyomata (determinizmus-teszt, spec 4.)."""
@@ -88,8 +89,14 @@ def _wide(s: pd.Series, ts: np.ndarray, syms: list[str]) -> np.ndarray:
 
 def run(bars: pd.DataFrame, signals: pd.DataFrame, tf: str, costs: Costs, risk: RiskParams,
         regime: pd.DataFrame | None = None, initial_capital: float = INITIAL_CAPITAL,
-        sizer: Sizer | None = None, mode: str = "backtest") -> Result:
+        sizer: Sizer | None = None, mode: str = "backtest", close_at_end: bool = True) -> Result:
+    """`close_at_end=False` (paper): a végén nyitva maradt pozíció nyitva marad, a mark áron
+    értékelve, és a `Result.open_positions` sorolja fel; a kötéslista csak a lezártakat tartalmazza."""
     step = tf_ms(tf)
+    if bars.empty:  # pl. a paper első órái: még nincs lezárt gyertya a kezdet után
+        return Result(pd.DataFrame(columns=TRADE_COLUMNS), pd.DataFrame(columns=["ts", "equity", "gross_exposure"]),
+                      pd.DataFrame(columns=["ts"]), pd.DataFrame(columns=["ts", "event", "reason"]), "ok",
+                      initial_capital)
     syms = list(dict.fromkeys(bars.index.get_level_values("symbol")))
     ts = np.array(sorted(set(bars.index.get_level_values("ts"))), dtype="int64")
     n_t, n_s = len(ts), len(syms)
@@ -210,8 +217,13 @@ def run(bars: pd.DataFrame, signals: pd.DataFrame, tf: str, costs: Costs, risk: 
         br.on_equity(t + step, equity)
         equity_prev = equity
 
+    open_rows = [{"symbol": syms[j], "side": 1 if p.qty > 0 else -1, "qty": abs(p.qty), "entry_ts": p.entry_ts,
+                  "entry_price": p.entry_price, "mark": float(last_mark[j]), "fees": p.fees, "funding": p.funding,
+                  "unrealized": p.qty * (last_mark[j] - p.entry_price), "entry_reason": p.reason,
+                  "regime": p.regime} for j, p in enumerate(pos) if p is not None]
     # --- a futás végén nyitva maradt pozíciók zárása az utolsó záróáron
-    if status == "ok":
+    if status == "ok" and close_at_end:
+        open_rows = []
         failed_last = br.failed_at is not None  # a heti DD épp az utolsó gyertyán oldott ki
         status = "failed" if failed_last else "ok"
         i = n_t - 1
@@ -221,6 +233,8 @@ def run(bars: pd.DataFrame, signals: pd.DataFrame, tf: str, costs: Costs, risk: 
                       "breaker_failed" if failed_last else "end")
         if eq_rows:
             eq_rows[-1] = (eq_rows[-1][0], cash, 0.0)
+    if br.failed_at is not None:
+        status = "failed"
 
     equity_df = pd.DataFrame(eq_rows, columns=["ts", "equity", "gross_exposure"])
     exposure_df = pd.DataFrame(np.array(expo_rows).reshape(-1, n_s), columns=syms)
@@ -230,4 +244,5 @@ def run(bars: pd.DataFrame, signals: pd.DataFrame, tf: str, costs: Costs, risk: 
         equity=equity_df, exposure=exposure_df,
         events=pd.DataFrame(br.events, columns=["ts", "event", "reason"]),
         status=status, initial_capital=initial_capital, skipped_entries=int(skipped),
+        open_positions=pd.DataFrame(open_rows),
     )

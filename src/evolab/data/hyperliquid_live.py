@@ -32,7 +32,7 @@ class HLInfo:
             return r.json()
 
     def asset_ctxs(self, coins: list[str]) -> pd.DataFrame:
-        """Pillanatkép: mark, mid, oracle ár, OI, aktuális funding coinonként."""
+        """Pillanatkép: mark, mid, oracle ár, OI, aktuális funding, impact bid/ask coinonként."""
         meta, ctxs = self._post({"type": "metaAndAssetCtxs"})
         rows = []
         for asset, ctx in zip(meta["universe"], ctxs):
@@ -46,6 +46,10 @@ class HLInfo:
                     "funding": float(ctx["funding"]),
                     "premium": float(ctx["premium"]) if ctx.get("premium") else float("nan"),
                     "day_ntl_vlm": float(ctx["dayNtlVlm"]),
+                    # a tőzsde által számolt „impact” ár egy szabványos névértékű piaci megbízásra:
+                    # ebből mérhető a valódi slippage (a mid-től vett távolság)
+                    "impact_bid": float(ctx["impactPxs"][0]) if ctx.get("impactPxs") else float("nan"),
+                    "impact_ask": float(ctx["impactPxs"][1]) if ctx.get("impactPxs") else float("nan"),
                 })
         return pd.DataFrame(rows)
 

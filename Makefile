@@ -1,5 +1,5 @@
 # EvolutionTrader - fázis-ellenőrzések. Használat: make verify-0
-.PHONY: help setup test verify-0 verify-1 verify-2 verify-3 verify-4 status ping daily data recorder-install
+.PHONY: help setup test verify-0 verify-1 verify-2 verify-3 verify-4 verify-5 status ping daily data recorder-install
 
 help:
 	@echo "make setup     - függőségek telepítése (uv sync)"
@@ -9,6 +9,7 @@ help:
 	@echo "make verify-2  - 2. fázis (szimulátor + 1 stratégia) elfogadási ellenőrzés"
 	@echo "make verify-3  - 3. fázis (bíró) elfogadási ellenőrzés"
 	@echo "make verify-4  - 4. fázis (induló populáció, L1-ítéletek) elfogadási ellenőrzés"
+	@echo "make verify-5  - 5. fázis (élő paper, riport, dashboard) elfogadási ellenőrzés"
 	@echo "make data      - Binance adat frissítése + rezsimcímkék"
 	@echo "make recorder-install - Hyperliquid rögzítő launchd-telepítése"
 	@echo "make status    - állapot"
@@ -97,3 +98,17 @@ verify-4:
 	c = connect(load_config().db_path); \
 	[print(f'  {k or \"-\":<16} {n:>5}') for k, n in c.execute('SELECT gate_result, COUNT(*) FROM trials GROUP BY 1 ORDER BY 2 DESC')]"
 	@echo "== 4. fázis: KÉSZ =="
+
+verify-5:
+	@echo "== 1/5 tesztek (test_paper_equals_backtest is) =="
+	uv run pytest
+	@echo "== 2/5 launchd: rögzítő, paper (óránként), napi futás =="
+	@launchctl list | grep evolutiontrader || echo "HIBA: nincs launchd feladat (ops/install-launchd.sh)"
+	@tail -n 3 logs/paper.log 2>/dev/null || echo "még nincs paper-napló"
+	@echo "== 3/5 paper-kör (Hyperliquid-szinkron + újrajátszás) =="
+	uv run evolab paper run
+	@echo "== 4/5 paper vs. visszateszt egyezés + mért slippage (a 30 napos ellenőrzés addig napi) =="
+	uv run evolab paper status
+	@echo "== 5/5 napi riport + dashboard =="
+	uv run evolab report
+	@echo "== 5. fázis: KÉSZ (a végleges paper = visszateszt ellenőrzés 30 nap paper után) =="

@@ -65,6 +65,7 @@ def _row(r: pd.Series, min_trades: int) -> dict:
         "regimes_pos": positive_regimes(reg, min_trades),           # a kapu szerinti szám
         "regimes_pos_any": positive_regimes(reg, 1),                 # tájékoztató: minimum nélkül
         "failures": "; ".join(json.loads(r["gate_failures"] or "[]")),
+        "out_dir": m.get("out_dir"),
     }
 
 

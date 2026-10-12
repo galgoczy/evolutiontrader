@@ -57,6 +57,7 @@ def test_ledger_append_only(cfg):
 def test_daily_without_telegram(cfg, capsys, monkeypatch):
     # az 1. fázistól a `data` lépés valódi letöltés; itt csonkkal helyettesítjük (nincs hálózat)
     monkeypatch.setitem(cli.STEP_FUNCS, "data", lambda cfg: "csonk")
+    monkeypatch.setitem(cli.STEP_FUNCS, "report", lambda cfg: "csonk")
     assert main(["daily"]) == 0
     out = capsys.readouterr().out
     assert "Telegram kihagyva" in out
@@ -70,6 +71,7 @@ def test_daily_step_error_reported(cfg, capsys, monkeypatch):
         raise RuntimeError("letöltési hiba")
 
     monkeypatch.setitem(cli.STEP_FUNCS, "data", boom)
+    monkeypatch.setitem(cli.STEP_FUNCS, "report", lambda cfg: "csonk")
     assert main(["daily"]) == 1
     assert "HIBA: letöltési hiba" in capsys.readouterr().out
     with connect(cfg.db_path) as conn:
