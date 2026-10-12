@@ -12,7 +12,7 @@ from evolab.config import load_config
 from evolab.db import connect, init_db, list_tables
 from evolab.notify import telegram
 
-# A napi futás lépései (docs/02-specifikacio.md 6.1). Valódi: `data` (1. fázis), `report` (5. fázis); a többi csonk.
+# A napi futás lépései (docs/02-specifikacio.md 6.1), mind valódi a 6. fázistól.
 DAILY_STEPS = ["data", "judge", "report", "researcher", "developer", "ladder"]
 
 
@@ -38,7 +38,70 @@ def step_report(cfg) -> str:
     return f"{md.name} + index.html\n{daily.telegram_text(r)}"
 
 
-STEP_FUNCS = {"data": step_data, "report": step_report}
+def step_judge(cfg) -> str:
+    """L2 paper-ítélet minden L2-es stratégiára + automatikus létra-lépések."""
+    from evolab.evolve import ladder
+    from evolab.judge.paper import evaluate_population
+
+    verdicts = evaluate_population(cfg)
+    res = ladder.apply(cfg, paper_verdicts=verdicts)
+    v = ", ".join(f"{x['strategy_id']}={x['result']}" for x in verdicts) or "nincs L2-es"
+    ch = ", ".join(f"{s} {a}→{b}" for s, a, b in res["changes"]) or "nincs szintváltás"
+    return f"paper-ítélet: {v}; {ch}"
+
+
+def step_researcher(cfg) -> str:
+    from evolab.evolve import researcher
+
+    ok, rejected = researcher.run(cfg)
+    ids = ", ".join(f"{h.id} ({h.family}/{h.mutation_type})" for h in ok) or "-"
+    return f"{len(ok)} hipotézis: {ids}; elutasítva: {len(rejected)}"
+
+
+def step_developer(cfg) -> str:
+    from evolab.evolve import developer
+
+    return developer.summary(developer.run(cfg, log=lambda *_: None))
+
+
+def waiting_text(cfg) -> str:
+    """A jóváhagyásra váró egyedek a spec 6.4 szerinti adatokkal."""
+    import json as _json
+
+    from evolab.evolve import ladder
+    from evolab.evolve.population import latest_verdicts
+    from evolab.strategy import registry
+
+    w = ladder.waiting(cfg)
+    if w.empty:
+        return "Jóváhagyásra vár: nincs"
+    v = latest_verdicts(cfg).set_index("strategy_id")
+    lines = ["Jóváhagyásra vár (válasz: /approve <id> vagy /reject <id> <ok>):"]
+    for r in w.itertuples():
+        row = v.loc[r.strategy_id] if r.strategy_id in v.index else None
+        m = _json.loads(row["is_metrics_json"]) if row is not None else {}
+        wf = _json.loads(row["wf_metrics_json"] or "{}") if row is not None else {}
+        try:
+            hyp = registry.load(r.strategy_id).meta.header.get("hypothesis", "")
+        except Exception:
+            hyp = ""
+        first = hyp.strip().split(". ")[0][:160]
+        lines.append(f"- {r.strategy_id} ({r.family}): DSR {row['dsr']:.3f}, PBO {row['pbo']:.2f}, "
+                     f"PF 2x {m.get('pf_2x', 0):.2f}, OOS/IS {wf.get('oos_is_ratio', 0):.2f}. {first}"
+                     if row is not None else f"- {r.strategy_id} ({r.family})")
+    return "\n".join(lines)
+
+
+def step_ladder(cfg) -> str:
+    from evolab.evolve import ladder
+
+    res = ladder.apply(cfg)
+    ch = ", ".join(f"{s} {a}→{b}" for s, a, b in res["changes"]) or "nincs szintváltás"
+    return f"{ch}\n{waiting_text(cfg)}"
+
+
+STEP_FUNCS = {"data": step_data, "judge": step_judge, "report": step_report, "researcher": step_researcher,
+              "developer": step_developer, "ladder": step_ladder}
 
 
 def cmd_init_db(args: argparse.Namespace) -> int:
@@ -304,6 +367,35 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_approve(args: argparse.Namespace) -> int:
+    from evolab.evolve import ladder
+
+    cfg = load_config()
+    try:
+        if args.action == "approve":
+            print(ladder.approve(cfg, args.strategy))
+        else:
+            print(ladder.reject(cfg, args.strategy, " ".join(args.reason)))
+    except ladder.LadderError as e:
+        print(f"Hiba: {e}")
+        return 1
+    return 0
+
+
+def cmd_telegram_poll(args: argparse.Namespace) -> int:
+    from evolab.notify import commands
+
+    cfg = load_config()
+    try:
+        done = commands.poll(cfg)
+    except telegram.TelegramNotConfigured as e:
+        print(f"Telegram kihagyva: {e}")
+        return 0
+    for cmd, reply in done:
+        print(f"{cmd} -> {reply}")
+    return 0
+
+
 def cmd_recorder(args: argparse.Namespace) -> int:
     from evolab.live import recorder
 
@@ -376,6 +468,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_paper)
 
     sub.add_parser("report", help="napi riport + dashboard (reports/)").set_defaults(func=cmd_report)
+
+    sp = sub.add_parser("approve", help="jóváhagyás: egy szinttel feljebb (L1 -> L2 paper)")
+    sp.add_argument("strategy")
+    sp.set_defaults(func=cmd_approve, action="approve", reason=[])
+    sp = sub.add_parser("reject", help="várólistás (L1) stratégia elutasítása")
+    sp.add_argument("strategy")
+    sp.add_argument("reason", nargs="*")
+    sp.set_defaults(func=cmd_approve, action="reject")
+    sub.add_parser("telegram-poll", help="Telegram-parancsok feldolgozása (/approve, /reject, /waiting)").set_defaults(
+        func=cmd_telegram_poll)
 
     sp = sub.add_parser("daily", help="napi futás (launchd hívja 02:00-kor)")
     sp.add_argument("--step", choices=DAILY_STEPS, default=None, help="csak egy lépés futtatása")

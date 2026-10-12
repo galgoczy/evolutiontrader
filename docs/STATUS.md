@@ -7,8 +7,8 @@
 | 2 Szimulátor + 1 stratégia | **kész** (2026-10-11) | `make verify-2` zöld; PR #3 merge-ölve |
 | 3 Bíró | **kész** (2026-10-11) | `make verify-3` zöld; PR #4 merge-ölve (emberi jóváhagyással) |
 | 4 Induló populáció | **kész** (2026-10-11) | `make verify-4` zöld; 40 variáns ítélettel, 0 ment át L1-en; PR #5 |
-| 5 Élő paper | **kész, a 30 napos egyezés-ellenőrzés fut** (2026-10-12) | `make verify-5` zöld; árnyék-paper 10 variánssal 2026-10-12 00:00 UTC-től; PR #6 |
-| 6 Hurok | nem kezdődött | |
+| 5 Élő paper | **kész, a 30 napos egyezés-ellenőrzés fut** (2026-10-12) | `make verify-5` zöld; árnyék-paper 10 variánssal 2026-10-12 00:00 UTC-től; PR #6 merge-ölve |
+| 6 Hurok | **kész, a 7 napos elfogadás gyűjt** (2026-10-12) | `make verify-6` zöld a tesztekre; a teljes napi hurok első éjszakája a merge után; PR #7 |
 | 7 Stabilizálás | nem kezdődött | |
 
 ## 0. fázis – mi készült
@@ -82,3 +82,18 @@
 
 ## Teendő
 - 2026-11-11 körül (30 nap paper): `make verify-5` – a végleges paper = visszateszt ellenőrzés és a slippage-mérés alapján döntés a slippage-modellről.
+
+## 6. fázis – evolúciós hurok (2026-10-12)
+- `evolve/researcher.py` (+ `prompts/researcher.md`): napi legfeljebb 3 hipotézis a helyi Claude Code CLI-n (előfizetés, felhasználói döntés), JSON-sémával; pydantic + szabályellenőrzés; `hypotheses` tábla + `hypotheses/YYYY-MM-DD.yaml`.
+- `evolve/developer.py` (+ `prompts/developer.md`): hipotézisenként git worktree `evolve/H-...` ágon; `param` mutáció LLM nélkül, a többi Claude Code-dal (Bash tiltva); homokozó (`evolve/sandbox.py`, `ops/hooks/pre-commit`), jövőbe-látás próba, param_grid-variánsok, L1-ítélet mind; átment ág merge a helyi `main`-be (ha tiszta).
+- `evolve/mutations.py`: determinisztikus operátorok (param, rezsimfeltétel, keresztezés); jelszintű elemek a `strategy/lib.py`-ban.
+- `evolve/ladder.py`: L0→L1 automatikus, L1→L2 / L2→L3 csak `/approve`-val, 14 napos várólista, paper-visszaléptetés; `judge/paper.py` + `gates.check_l2`: L2 paper-ítélet.
+- `notify/commands.py`: Telegram `/approve`, `/reject`, `/waiting`, `/status` (óránként, a paper-feladattal); kézzel `evolab approve|reject`.
+- A napi futás mind a 6 lépése valódi: data → judge → report → researcher → developer → ladder.
+- Első valódi kör (2026-10-12, kézzel): 3 hipotézis (szűrő, rezsimfeltétel, paraméter), 6 variáns, mind elbukott L1-en. A `volbreak-h2026101203-v2` (szélesebb stop) csak a PBO-n bukott (0,61), ami 2 hasonló variánsnál inkább zaj.
+
+## Nyitott kérdés (felhasználói döntés)
+4. PBO kis variánscsaládon: ha egy hipotézisnek csak 2-3, egymáshoz nagyon hasonló variánsa van, a PBO közel véletlen (~0,5), és egy egyébként minden kapun átmenő variánst is megfoghat. Lehetőségek: (a) marad; (b) a PBO a hipotézis variánsai helyett mindig a teljes családon számol; (c) legalább N (pl. 4) variáns alatt a család-szintű PBO-t használja. Bírói kérdés (`judge.yaml`/`judge/`), csak emberi döntéssel.
+
+## Teendő
+- A merge után 7 egymást követő éjszaka: `make verify-6` → „egymást követő sikeres napi futás: 7/7”.

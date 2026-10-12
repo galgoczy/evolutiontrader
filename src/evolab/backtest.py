@@ -129,7 +129,12 @@ def _write_outputs(cfg: Config, bt: BacktestRun) -> Path:
 def _register_strategy(cfg: Config, strat: registry.LoadedStrategy) -> None:
     m = strat.meta
     repo = Path(registry.__file__).resolve().parents[3]  # src/evolab/strategy/registry.py -> repó
-    rel = str(strat.path.relative_to(repo)) if strat.path.is_relative_to(repo) else str(strat.path)
+    if strat.path.is_relative_to(repo):
+        rel = str(strat.path.relative_to(repo))
+    elif "src" in strat.path.parts:  # fejlesztői worktree: a merge után ugyanitt lesz a repóban
+        rel = str(Path(*strat.path.parts[strat.path.parts.index("src"):]))
+    else:
+        rel = str(strat.path)
     init_db(cfg)
     with connect(cfg.db_path) as conn:
         conn.execute(

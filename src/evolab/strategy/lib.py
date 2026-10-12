@@ -187,3 +187,55 @@ def pair_reversion_signal(bars: pd.DataFrame, p: dict) -> pd.DataFrame:
         out.loc[idx, "target_position"] = t
         out.loc[idx, "reason"] = np.select([t > 0, t < 0], [f"{a}/{b}_z_long", f"{a}/{b}_z_short"], "")
     return out
+
+
+# ---------------------------------------------------------------- mutációk (spec 6.5) jelszinten
+
+
+def parent_signals(parent_id: str, bars: pd.DataFrame, regime: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    """Egy meglévő variáns jele (opcionálisan más paraméterekkel) – a származtatott variánsok alapja."""
+    from evolab.strategy import registry
+
+    s = registry.load(parent_id)
+    if params:
+        s = s.with_params({**s.meta.params, **params})
+    return s.signals(bars, regime)
+
+
+def regime_mask(regime: pd.DataFrame, labels: list[str]) -> pd.Series:
+    """Igaz, ahol az (előző napi) trend/vol címke a megadottak egyike."""
+    if regime is None or regime.empty:
+        return pd.Series(False, index=regime.index if regime is not None else None)
+    lab = regime["trend"].astype(str) + "/" + regime["vol"].astype(str)
+    return lab.isin(labels)
+
+
+def condition(sig: pd.DataFrame, allowed: pd.Series, reason: str = "") -> pd.DataFrame:
+    """A jel csak ott érvényes, ahol `allowed` igaz; máshol lapos (a stop is törlődik)."""
+    out = sig.copy()
+    allowed = allowed.reindex(out.index).fillna(False).astype(bool)
+    out.loc[~allowed, "target_position"] = 0.0
+    out.loc[~allowed, "stop_price"] = np.nan
+    if reason:
+        out.loc[allowed & (out["target_position"] != 0), "reason"] = out["reason"].astype(str) + f"|{reason}"
+    return out
+
+
+def block_direction(sig: pd.DataFrame, block_long: pd.Series, block_short: pd.Series) -> pd.DataFrame:
+    """Szűrő: ahol `block_long` igaz, long nem lehet; ahol `block_short`, short nem lehet."""
+    out = sig.copy()
+    t = out["target_position"]
+    bl = block_long.reindex(out.index).fillna(False).astype(bool)
+    bs = block_short.reindex(out.index).fillna(False).astype(bool)
+    kill = ((t > 0) & bl) | ((t < 0) & bs)
+    out.loc[kill, "target_position"] = 0.0
+    out.loc[kill, "stop_price"] = np.nan
+    return out
+
+
+def crossover(entry: pd.DataFrame, exit_: pd.DataFrame) -> pd.DataFrame:
+    """Keresztezés: a célpozíció az `entry` jeléből, a stop az `exit_` jeléből, ahol az iránya egyezik."""
+    out = entry.copy()
+    same = np.sign(exit_["target_position"].reindex(out.index)) == np.sign(out["target_position"])
+    out["stop_price"] = exit_["stop_price"].reindex(out.index).where(same & (out["target_position"] != 0))
+    return out

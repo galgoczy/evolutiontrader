@@ -50,3 +50,11 @@ def recent_chats() -> list[tuple[str, str]]:
             name = chat.get("username") or chat.get("first_name") or chat.get("title") or ""
             seen[str(chat["id"])] = name
     return list(seen.items())
+
+
+def updates(offset: int | None = None) -> list[dict]:
+    """Új üzenetek a bothoz (getUpdates, várakozás nélkül)."""
+    params = {"timeout": 0}
+    if offset is not None:
+        params["offset"] = offset
+    return _call("getUpdates", **params)
