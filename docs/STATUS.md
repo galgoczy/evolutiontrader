@@ -7,7 +7,7 @@
 | 2 Szimulátor + 1 stratégia | **kész** (2026-10-11) | `make verify-2` zöld; PR #3 merge-ölve |
 | 3 Bíró | **kész** (2026-10-11) | `make verify-3` zöld; PR #4 merge-ölve (emberi jóváhagyással) |
 | 4 Induló populáció | **kész** (2026-10-11) | `make verify-4` zöld; 40 variáns ítélettel, 0 ment át L1-en; PR #5 |
-| 5 Élő paper | nem kezdődött | |
+| 5 Élő paper | **kész, a 30 napos egyezés-ellenőrzés fut** (2026-10-12) | `make verify-5` zöld; árnyék-paper 10 variánssal 2026-10-12 00:00 UTC-től; PR #6 |
 | 6 Hurok | nem kezdődött | |
 | 7 Stabilizálás | nem kezdődött | |
 
@@ -71,3 +71,14 @@
 1. „2x költség” kapu: díj + slippage duplázva – **eldöntve, marad**.
 2. Slippage-modell: változatlan, az 5. fázis paper-mérése után újra – **eldöntve**.
 3. Rezsim-kapu kötésszám-minimuma: **5 kötés** (2026-10-12, `judge.yaml` v2) – eldöntve, „egyelőre”.
+
+## 5. fázis – élő paper (2026-10-12)
+- `live/paper_runner.py`: Hyperliquid-gyertyákon ugyanaz a szimulátor (`mode='paper'`), determinisztikus újrajátszás; launchd `com.evolutiontrader.paper` óránként :03-kor (`logs/paper.log`).
+- Árnyék-paper (felhasználói döntés): a 10 legjobb DSR-ű variáns, `data/paper/roster.json`; L2-es egyed még nincs.
+- `evolab paper run|status|roster`: könyvelés; paper vs. Binance-visszateszt egyezés (±5%, 30 nap után végleges); mért slippage.
+- A rögzítő a Hyperliquid impact bid/ask árat is menti (valódi slippage).
+- `evolab report` és a napi futás `report` lépése: `reports/YYYY-MM-DD.md` + `.json`, dashboard `reports/index.html`, Telegram-összefoglaló.
+- Tesztek: `test_paper_equals_backtest` (azonos adaton pontos egyezés, zajjal ±5%), újrajátszás = gyertyánkénti könyvelés, Hyperliquid BarFrame időzítés, névsor, riport/dashboard.
+
+## Teendő
+- 2026-11-11 körül (30 nap paper): `make verify-5` – a végleges paper = visszateszt ellenőrzés és a slippage-mérés alapján döntés a slippage-modellről.

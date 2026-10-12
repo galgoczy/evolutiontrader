@@ -167,3 +167,52 @@ def load_barframe(cfg: Config, symbols: list[str], tf: str, end_ms: int | None =
         raise FileNotFoundError(f"Nincs {tf} gyertya a {symbols} coinokra (evolab data update).")
     out = pd.concat(frames, ignore_index=True)
     return out.set_index(["symbol", "ts"]).sort_index()
+
+
+def read_hl_ticks(cfg: Config, symbol: str) -> pd.DataFrame:
+    """A rögzítő percenkénti pillanatképei (napi parquet fájlokból) egy coinra, időrendben."""
+    files = sorted(hl_dir(cfg, symbol).glob("ticks_*.parquet"))
+    frames = [read_parquet(f) for f in files]
+    frames = [f for f in frames if not f.empty]
+    if not frames:
+        return pd.DataFrame(columns=["ts", "mark_px", "mid_px", "open_interest"])
+    return pd.concat(frames, ignore_index=True).drop_duplicates("ts").sort_values("ts").reset_index(drop=True)
+
+
+def load_hl_barframe(cfg: Config, symbols: list[str], tf: str) -> pd.DataFrame:
+    """Hyperliquid BarFrame (élő paper, spec 4.): ugyanaz az alak, mint a `load_barframe`-é.
+
+    - OHLCV: a rögzítő lezárt Hyperliquid-gyertyái;
+    - `open`: a gyertya nyitó percének MID ára (a teljesülés ára, spec 4.), ha van pillanatkép, különben
+      a gyertya nyitója;
+    - `mark_close`: az utolsó mark ár a zárás ELŐTT (legfeljebb egy gyertyányi régi), különben a záró;
+    - `funding_rate`: a gyertya alatt esedékes óránkénti Hyperliquid-funding összege;
+    - `oi`: az utolsó open interest a zárás ELŐTT (a jel csak ezt láthatja), különben NaN.
+    """
+    step = tf_ms(tf)
+    frames = []
+    for sym in symbols:
+        c = read_parquet(hl_dir(cfg, sym) / f"candles_{tf}.parquet")
+        if c.empty:
+            continue
+        c = c.sort_values("ts").reset_index(drop=True)
+        ticks = read_hl_ticks(cfg, sym)
+        if not ticks.empty:
+            t = ticks.astype({"ts": "int64"})
+            mid_open = t.set_index("ts")["mid_px"]
+            c["open"] = c["ts"].map(mid_open).fillna(c["open"])
+            left = c.assign(close_ts=c["ts"].astype("int64") + step - 1)  # szigorúan a zárás előtt
+            right = t[["ts", "mark_px", "open_interest"]].rename(columns={"ts": "close_ts"})
+            m = pd.merge_asof(left, right, on="close_ts", direction="backward", tolerance=step)
+            c["mark_close"] = m["mark_px"].fillna(c["close"]).to_numpy()
+            c["oi"] = m["open_interest"].to_numpy()
+        else:
+            c["mark_close"], c["oi"] = c["close"], float("nan")
+        fr = funding_by_bar(read_parquet(hl_dir(cfg, sym) / "funding.parquet"), tf)
+        c["funding_rate"] = c["ts"].map(fr).fillna(0.0).astype(float)
+        c["quote_volume"] = c["volume"] * c["close"]
+        c["premium_close"] = float("nan")
+        frames.append(c.assign(symbol=sym))
+    if not frames:
+        raise FileNotFoundError(f"Nincs Hyperliquid {tf} gyertya (fut a rögzítő?)")
+    return pd.concat(frames, ignore_index=True).set_index(["symbol", "ts"]).sort_index()

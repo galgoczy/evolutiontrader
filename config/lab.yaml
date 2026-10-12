@@ -26,6 +26,11 @@ population:
   initial: 40
   open_slots: 10
 
+paper:                          # élő paper (5. fázis)
+  shadow_top_n: 10              # árnyék-paper: a legjobb DSR-ű ennyi variáns, amíg nincs L2-es (döntés 2026-10-12)
+  match_tolerance_pct: 5        # paper vs. visszateszt végső equity-eltérés megengedett %-a (spec 4.)
+  compare_min_days: 30          # ennyi nap után végleges az egyezés-ellenőrzés (spec 10.)
+
 paths:
   data: data
   db: data/lab.db

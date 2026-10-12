@@ -12,7 +12,7 @@ from evolab.config import load_config
 from evolab.db import connect, init_db, list_tables
 from evolab.notify import telegram
 
-# A napi futás lépései (docs/02-specifikacio.md 6.1). Az 1. fázistól a `data` valódi, a többi csonk.
+# A napi futás lépései (docs/02-specifikacio.md 6.1). Valódi: `data` (1. fázis), `report` (5. fázis); a többi csonk.
 DAILY_STEPS = ["data", "judge", "report", "researcher", "developer", "ladder"]
 
 
@@ -28,7 +28,17 @@ def step_data(cfg) -> str:
     return f"{rep.summary()}; rezsimcímkék: {n} sor"
 
 
-STEP_FUNCS = {"data": step_data}
+def step_report(cfg) -> str:
+    """Napi riport (`reports/YYYY-MM-DD.md` + `.json`) és dashboard (`reports/index.html`)."""
+    from evolab.report import daily, dashboard
+
+    r = daily.build(cfg)
+    md, _ = daily.write(cfg, r)
+    dashboard.write(cfg, r)
+    return f"{md.name} + index.html\n{daily.telegram_text(r)}"
+
+
+STEP_FUNCS = {"data": step_data, "report": step_report}
 
 
 def cmd_init_db(args: argparse.Namespace) -> int:
@@ -248,6 +258,52 @@ def cmd_population(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_paper(args: argparse.Namespace) -> int:
+    from evolab.live import paper_runner as pr
+
+    cfg = load_config()
+    if args.action == "run":
+        out = pr.run(cfg, sync=not args.no_sync, log=lambda m: print(m, flush=True))
+        return 1 if any("error" in v for v in out.values()) else 0
+    if args.action == "roster":
+        roster = pr.ensure_roster(cfg, reselect_shadow=args.reselect)
+        for sid, info in sorted(roster["strategies"].items()):
+            start = pd_ts(info["start_ms"])
+            print(f"  {sid:<34} {info['mode']:<6} kezdet {start}")
+        return 0
+    # status: paper-állapot + egyezés a visszateszttel + mért slippage
+    roster = pr.read_roster(cfg)
+    if not roster["strategies"]:
+        print("A paper-névsor üres (evolab paper run).")
+        return 1
+    cache: dict = {}
+    print("Paper (Hyperliquid) vs. visszateszt (Binance), ugyanarra az időszakra:")
+    for sid, info in sorted(roster["strategies"].items()):
+        s = pr.read_summary(cfg, sid) or {}
+        c = pr.compare(cfg, sid, cache)
+        diff = "-" if c["diff_pct"] is None else f"{c['diff_pct']:.2f}%"
+        verdict = "-" if c["ok"] is None else ("OK" if c["ok"] else "ELTÉR")
+        print(f"  {sid:<34} {info['mode']:<6} {c['days']:>5.1f} nap, kötés {s.get('trades', 0):>3}, "
+              f"hozam {s.get('return_pct', 0.0):+6.2f}%, eltérés {diff:>7} {verdict}"
+              f"{' (végleges)' if c.get('final_check') else ''}")
+    print("Slippage: mért (Hyperliquid impact, 7 nap medián) vs. modell (4h):")
+    for r in pr.measured_slippage(cfg).itertuples():
+        m = "-" if r.measured_pct is None or r.measured_pct != r.measured_pct else f"{r.measured_pct:.4f}%"
+        print(f"  {r.symbol:<9} mért {m:>9}  modell {r.model_pct:.4f}%  ({r.samples} minta)")
+    return 0
+
+
+def pd_ts(ms: int) -> str:
+    return dt.datetime.fromtimestamp(ms / 1000, dt.UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    print(step_report(cfg))
+    print(f"Dashboard: {cfg.path('reports') / 'index.html'}")
+    return 0
+
+
 def cmd_recorder(args: argparse.Namespace) -> int:
     from evolab.live import recorder
 
@@ -312,6 +368,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("population", help="induló populáció: L1-ítélet minden variánsra (seed) vagy riport")
     sp.add_argument("action", choices=["seed", "report"])
     sp.set_defaults(func=cmd_population)
+
+    sp = sub.add_parser("paper", help="élő paper Hyperliquid-adaton: run (launchd óránként), status, roster")
+    sp.add_argument("action", choices=["run", "status", "roster"])
+    sp.add_argument("--no-sync", action="store_true", help="run: a Hyperliquid-gyertyák szinkronja nélkül")
+    sp.add_argument("--reselect", action="store_true", help="roster: új árnyék-lista választása")
+    sp.set_defaults(func=cmd_paper)
+
+    sub.add_parser("report", help="napi riport + dashboard (reports/)").set_defaults(func=cmd_report)
 
     sp = sub.add_parser("daily", help="napi futás (launchd hívja 02:00-kor)")
     sp.add_argument("--step", choices=DAILY_STEPS, default=None, help="csak egy lépés futtatása")

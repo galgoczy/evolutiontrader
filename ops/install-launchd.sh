@@ -2,6 +2,7 @@
 # Telepíti (vagy frissíti) a launchd feladatokat a jelenlegi felhasználónak:
 #   com.evolutiontrader.daily     napi 02:00-s futás
 #   com.evolutiontrader.recorder  Hyperliquid rögzítő, folyamatosan (KeepAlive)
+#   com.evolutiontrader.paper     élő paper, óránként :03-kor
 # Csak az egyiket: ops/install-launchd.sh recorder   (vagy: daily)
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -27,7 +28,7 @@ install_one() {
     echo "Telepítve: $DEST"
 }
 
-for job in "${@:-daily recorder}"; do
+for job in "${@:-daily recorder paper}"; do
     for j in $job; do install_one "$j"; done
 done
 echo "launchd naplók: $LOGDIR/"
