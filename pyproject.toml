@@ -17,10 +17,8 @@ dependencies = [
     "anthropic>=0.40",
     "python-dotenv>=1.0",
     "httpx>=0.27",
+    "hmmlearn>=0.3.3",
 ]
-
-[project.optional-dependencies]
-regime = ["hmmlearn>=0.3"]
 
 [project.scripts]
 evolab = "evolab.cli:main"

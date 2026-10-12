@@ -21,12 +21,14 @@ MAX_POINTS = 400
 
 CSS = """
 :root{color-scheme:light;--page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;
---grid:#e1e0d9;--axis:#c3c2b7;--line:#2a78d6;--ring:rgba(11,11,11,.10);--good:#006300;--bad:#d03b3b}
+--grid:#e1e0d9;--axis:#c3c2b7;--line:#2a78d6;--ring:rgba(11,11,11,.10);--good:#006300;--bad:#d03b3b;
+--div-neg:#2a78d6;--div-pos:#e34948;--div-mid:#f0efec}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--page:#0d0d0d;
 --surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--line:#3987e5;
---ring:rgba(255,255,255,.10);--good:#0ca30c;--bad:#e66767}}
+--ring:rgba(255,255,255,.10);--good:#0ca30c;--bad:#e66767;--div-neg:#3987e5;--div-pos:#e66767;--div-mid:#383835}}
 :root[data-theme="dark"]{color-scheme:dark;--page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;
---grid:#2c2c2a;--axis:#383835;--line:#3987e5;--ring:rgba(255,255,255,.10);--good:#0ca30c;--bad:#e66767}
+--grid:#2c2c2a;--axis:#383835;--line:#3987e5;--ring:rgba(255,255,255,.10);--good:#0ca30c;--bad:#e66767;
+--div-neg:#3987e5;--div-pos:#e66767;--div-mid:#383835}
 *{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--ink);
 font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
 main{max-width:1180px;margin:0 auto;padding:16px}h1{font-size:20px;margin:8px 0 2px}
@@ -46,6 +48,7 @@ svg .xh{stroke:var(--axis);visibility:hidden}svg .dot{fill:var(--line);stroke:va
 .tip{position:fixed;pointer-events:none;background:var(--surface);color:var(--ink);border:1px solid var(--ring);
 border-radius:6px;padding:4px 8px;font-size:12px;display:none;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .empty{color:var(--muted);font-size:12px;padding:24px 0;text-align:center}
+.heat{border-collapse:separate;border-spacing:2px;background:transparent;width:auto}.heat td{width:44px;height:28px;text-align:center;font-size:11px;border:0;border-radius:4px;font-variant-numeric:tabular-nums;color:var(--ink)}.heat th{font-size:11px;font-weight:500;border:0;padding:2px 6px}.heat th.col{writing-mode:vertical-rl;transform:rotate(180deg);height:210px;text-align:left;white-space:nowrap}.legend{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:12px;margin:8px 0}.legend i{display:inline-block;width:120px;height:10px;border-radius:5px;background:linear-gradient(90deg,var(--div-neg),var(--div-mid),var(--div-pos))}
 """
 
 JS = """
@@ -116,6 +119,26 @@ def line_chart(equity: pd.DataFrame, label: str) -> str:
             f'<line class="xh" x1="0" x2="0" y1="{top}" y2="{bottom}"/><circle class="dot" r="4"/>{xlab}</svg>')
 
 
+def heatmap(ids: list[str], matrix: list[list[float]], corr_max: float) -> str:
+    """Korrelációs hőtérkép: eltérő skála kék (−1) – szürke (0) – piros (+1); az érték a cellában is."""
+    if len(ids) < 2:
+        return '<div class="empty">A diverzitáshoz legalább 2 egyed hozamsora kell.</div>'
+    head = "".join(f"<th class='col'>{_esc(i)}</th>" for i in ids)
+    rows = []
+    for a, row in zip(ids, matrix):
+        cells = []
+        for b, v in zip(ids, row):
+            pole = "var(--div-pos)" if v >= 0 else "var(--div-neg)"
+            pct = round(min(1.0, abs(v)) * 100)
+            mark = " ●" if a != b and v > corr_max else ""
+            cells.append(f"<td style='background:color-mix(in oklab, {pole} {pct}%, var(--div-mid))' "
+                         f"title='{_esc(a)} × {_esc(b)}: {v:.2f}'>{v:.2f}{mark}</td>")
+        rows.append(f"<tr><th>{_esc(a)}</th>{''.join(cells)}</tr>")
+    return (f"<div class='legend'><span>−1</span><i></i><span>+1</span><span>● = korreláció > {corr_max} "
+            f"(a gyengébb DSR-ű büntetést kap)</span></div><div class='wrap'><table class='heat'>"
+            f"<tr><th></th>{head}</tr>{''.join(rows)}</table></div>")
+
+
 def _backtest_equity(variant: dict) -> pd.DataFrame | None:
     out = variant.get("out_dir")
     p = Path(out) / "equity.parquet" if out else None
@@ -176,6 +199,17 @@ def build_html(cfg: Config, r: dict) -> str:
         H.append(f"<div class='card'><h3>{_esc(sid)}</h3><p>visszateszt</p>{line_chart(bt, 'visszateszt')}"
                  f"<p>paper</p>{line_chart(paper_eq, 'paper')}</div>")
     H.append("</div>")
+    dv = r.get("diversity") or {}
+    if dv.get("ranking"):
+        H.append("<h2>Diverzitás (paper-névsor)</h2><p class='sub'>Napi hozamok korrelációja; a rangsor-DSR a "
+                 "büntetés utáni érték (spec 5.7).</p>")
+        H.append(heatmap(dv["corr"]["ids"], dv["corr"]["matrix"], dv["corr_max"]))
+        H.append("<div class='wrap'><table><tr><th>rang</th><th>stratégia</th><th class='n'>DSR</th>"
+                 "<th class='n'>rangsor-DSR</th><th>büntetve (hasonló ehhez)</th></tr>")
+        H += [f"<tr><td class='n'>{k}</td><td>{_esc(d['strategy_id'])}</td><td class='n'>{_num(d['dsr'], '{:.3f}')}</td>"
+              f"<td class='n'>{_num(d['dsr_ranked'], '{:.3f}')}</td><td>{_esc(d['penalized_by'] or '–')}</td></tr>"
+              for k, d in enumerate(dv["ranking"], 1)]
+        H.append("</table></div>")
     H.append("<h2>Slippage: mért vs. modell</h2><div class='wrap'><table><tr><th>coin</th><th>minta</th>"
              "<th>mért (medián)</th><th>mért p95</th><th>modell (4h)</th></tr>")
     for s in r["slippage"]:

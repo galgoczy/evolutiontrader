@@ -17,15 +17,18 @@ DAILY_STEPS = ["data", "judge", "report", "researcher", "developer", "ladder"]
 
 
 def step_data(cfg) -> str:
-    """Binance pótlás + rezsimcímkék frissítése. (A Hyperliquid rögzítő külön folyamat.)"""
+    """Binance pótlás + rezsimcímkék (szabályalapú és HMM-variáns). (A Hyperliquid rögzítő külön folyamat.)"""
     from evolab.data import binance_bulk
     from evolab.features import regime
 
+    from evolab.features import regime_hmm
+
     rep = binance_bulk.update(cfg, log=lambda *_: None)
     n = regime.update(cfg)
+    n_hmm = regime_hmm.update(cfg)
     if rep.errors:
         raise RuntimeError(f"{rep.summary()}; első hiba: {rep.errors[0]}")
-    return f"{rep.summary()}; rezsimcímkék: {n} sor"
+    return f"{rep.summary()}; rezsimcímkék: {n} sor, HMM-variáns: {n_hmm} sor"
 
 
 def step_report(cfg) -> str:
@@ -239,6 +242,20 @@ def cmd_regime(args: argparse.Namespace) -> int:
     from evolab.features import regime
 
     cfg = load_config()
+    if args.compare:
+        from evolab.features import regime_hmm
+
+        c = regime_hmm.compare(cfg)
+        if c.empty:
+            print("Nincs összevethető ítélet (evolab population seed, evolab regime + HMM).")
+            return 1
+        g = cfg.judge["L1_backtest"]["regimes_positive_min"]
+        print("Rezsimcímkéző-variánsok (a legutolsó L1-ítéletek kötései újracímkézve):")
+        print(f"  {'':<34}{'szabályalapú':>14}{'HMM':>8}")
+        print(f"  {'átlagos pozitív kombináció':<34}{c['pos_rule'].mean():>14.2f}{c['pos_hmm'].mean():>8.2f}")
+        print(f"  {'rezsim-kapun átmenő variáns':<34}{int((c['pos_rule'] >= g).sum()):>14}{int((c['pos_hmm'] >= g).sum()):>8}")
+        print(f"  {'EV-szórás (elkülönítő erő)':<34}{c['ev_spread_rule'].mean():>14.2f}{c['ev_spread_hmm'].mean():>8.2f}")
+        return 0
     df = regime.compute(cfg)
     n = regime.write(cfg, df)
     print(f"regime_daily: {n} sor ({df['symbol'].nunique() if n else 0} coin)")
@@ -396,6 +413,23 @@ def cmd_telegram_poll(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_watchdog(args: argparse.Namespace) -> int:
+    from evolab.notify import watchdog
+
+    cfg = load_config()
+    if args.dry_run:
+        probs = watchdog.problems(cfg)
+        print("\n".join(f"HIBA {k}: {v}" for k, v in probs.items()) or "Minden rendben.")
+        return 1 if probs else 0
+    try:
+        sent = watchdog.run(cfg)
+    except telegram.TelegramNotConfigured as e:
+        print(f"Telegram kihagyva: {e}")
+        return 0
+    print("\n".join(sent) or "Nincs új riasztás.")
+    return 0
+
+
 def cmd_recorder(args: argparse.Namespace) -> int:
     from evolab.live import recorder
 
@@ -438,7 +472,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp = dp.add_parser("gaps", help="hiányzó gyertyák riportja -> reports/data_gaps.csv")
     sp.set_defaults(func=cmd_data_gaps)
 
-    sub.add_parser("regime", help="rezsimcímkék számolása -> regime_daily").set_defaults(func=cmd_regime)
+    sp = sub.add_parser("regime", help="rezsimcímkék számolása -> regime_daily (--compare: HMM-variánssal összevetve)")
+    sp.add_argument("--compare", action="store_true", help="szabályalapú vs. HMM címkéző összevetése")
+    sp.set_defaults(func=cmd_regime)
 
     sp = sub.add_parser("recorder", help="Hyperliquid élő rögzítő (launchd tartja életben)")
     sp.add_argument("--once", action="store_true", help="egyetlen pillanatkép + gyertya-szinkron")
@@ -478,6 +514,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_approve, action="reject")
     sub.add_parser("telegram-poll", help="Telegram-parancsok feldolgozása (/approve, /reject, /waiting)").set_defaults(
         func=cmd_telegram_poll)
+
+    sp = sub.add_parser("watchdog", help="folyamat-őr: rögzítő, paper, napi futás, lemez (óránként, Telegram)")
+    sp.add_argument("--dry-run", action="store_true", help="csak kiírja a hibákat, nem küld üzenetet")
+    sp.set_defaults(func=cmd_watchdog)
 
     sp = sub.add_parser("daily", help="napi futás (launchd hívja 02:00-kor)")
     sp.add_argument("--step", choices=DAILY_STEPS, default=None, help="csak egy lépés futtatása")

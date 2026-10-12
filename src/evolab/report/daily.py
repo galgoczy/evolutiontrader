@@ -57,6 +57,45 @@ def _trial_counts(cfg: Config) -> list[dict]:
     return out
 
 
+def _member_returns(cfg: Config, sid: str, variant: dict | None) -> pd.Series | None:
+    """Napi hozam a diverzitáshoz: paper, ha már elég hosszú, különben a legutolsó visszateszté."""
+    from evolab.judge.diversity import MIN_PAPER_DAYS
+    from evolab.judge.metrics import daily_returns
+
+    pe = pr.paper_dir(cfg) / sid / "equity.parquet"
+    if pe.exists():
+        eq = pd.read_parquet(pe)
+        r = daily_returns(eq, 10_000.0) if len(eq) else pd.Series(dtype=float)
+        if len(r) >= MIN_PAPER_DAYS:
+            return r
+    out = (variant or {}).get("out_dir")
+    p = Path(out) / "returns_daily.parquet" if out else None
+    if p and p.exists():
+        df = pd.read_parquet(p)
+        return pd.Series(df["ret"].to_numpy(), index=pd.to_datetime(df["day"], utc=True))
+    return None
+
+
+def diversity(cfg: Config, roster: dict, variants: list[dict]) -> dict:
+    from evolab.judge.diversity import correlation, penalized_ranking
+
+    by_id = {v["strategy_id"]: v for v in variants}
+    rets = {}
+    for sid in roster:
+        r = _member_returns(cfg, sid, by_id.get(sid))
+        if r is not None and len(r):
+            rets[sid] = r
+    if len(rets) < 2:
+        return {"ranking": [], "corr": {"ids": [], "matrix": []}}
+    frame = pd.DataFrame(rets)
+    dsr = pd.Series({sid: float(by_id.get(sid, {}).get("dsr") or 0.0) for sid in rets})
+    d = cfg.judge["diversity"]
+    rank = penalized_ranking(dsr, frame, d["corr_max"], d["dsr_penalty"])
+    c = correlation(frame)
+    return {"ranking": rank.to_dict("records"), "corr_max": d["corr_max"], "penalty": d["dsr_penalty"],
+            "corr": {"ids": list(c.columns), "matrix": c.round(3).fillna(0.0).values.tolist()}}
+
+
 def build(cfg: Config, today: dt.date | None = None) -> dict:
     from evolab.live.recorder import health
 
@@ -89,6 +128,7 @@ def build(cfg: Config, today: dt.date | None = None) -> dict:
         "regime": _regime_today(cfg),
         "trial_counts": _trial_counts(cfg),
         "recorder": {sym: {"coverage": h["coverage"], "max_gap_min": h["max_gap_min"]} for sym, h in rec.items()},
+        "diversity": diversity(cfg, roster, table.to_dict("records") if not table.empty else []),
     }
 
 
@@ -115,6 +155,15 @@ def to_markdown(r: dict) -> str:
         L.append(f"| {p['strategy_id']} | {p['mode']} | {_f(p['days'], '{:.1f}')} | {p['trades'] or 0} | "
                  f"{p['open_positions'] or 0} | {_f(p['return_pct'], '{:+.2f}%')} | {_f(p['max_dd_pct'], '{:.1f}%')} | "
                  f"{_f(p['diff_pct'], '{:.2f}%')} {match}{' (végleges)' if p['final_check'] else ''} |")
+    div = r.get("diversity", {})
+    dv = div.get("ranking", [])
+    if dv:
+        L += ["", "## Diverzitás (paper-névsor, spec 5.7)", "",
+              f"Ha két egyed napi hozamának korrelációja > {div['corr_max']}, a gyengébb DSR-ű ×{div['penalty']} "
+              "büntetést kap a rangsorban.", "",
+              "| rang | stratégia | DSR | rangsor-DSR | büntetve (hasonló ehhez) |", "|---|---|---|---|---|"]
+        L += [f"| {k} | {d['strategy_id']} | {_f(d['dsr'], '{:.3f}')} | {_f(d['dsr_ranked'], '{:.3f}')} | "
+              f"{d['penalized_by'] or '-'} |" for k, d in enumerate(dv, 1)]
     L += ["", "## Slippage: mért (Hyperliquid impact, 7 nap medián) vs. modell", "",
           "| coin | minta | mért | mért p95 | modell (4h) |", "|---|---|---|---|---|"]
     L += [f"| {s['symbol']} | {s['samples']} | {_f(s.get('measured_pct'), '{:.4f}%')} | "

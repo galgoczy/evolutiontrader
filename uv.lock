@@ -523,6 +523,7 @@ dependencies = [
     { name = "anthropic" },
     { name = "ccxt" },
     { name = "duckdb" },
+    { name = "hmmlearn" },
     { name = "httpx" },
     { name = "hyperliquid-python-sdk" },
     { name = "numpy" },
@@ -532,11 +533,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "scipy" },
-]
-
-[package.optional-dependencies]
-regime = [
-    { name = "hmmlearn" },
 ]
 
 [package.dev-dependencies]
@@ -549,7 +545,7 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.40" },
     { name = "ccxt", specifier = ">=4.4" },
     { name = "duckdb", specifier = ">=1.1" },
-    { name = "hmmlearn", marker = "extra == 'regime'", specifier = ">=0.3" },
+    { name = "hmmlearn", specifier = ">=0.3.3" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "hyperliquid-python-sdk", specifier = ">=0.9" },
     { name = "numpy", specifier = ">=2.0" },
@@ -560,7 +556,6 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "scipy", specifier = ">=1.14" },
 ]
-provides-extras = ["regime"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.3" }]

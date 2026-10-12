@@ -1,5 +1,5 @@
 # EvolutionTrader - fázis-ellenőrzések. Használat: make verify-0
-.PHONY: help setup test verify-0 verify-1 verify-2 verify-3 verify-4 verify-5 verify-6 status ping daily data recorder-install
+.PHONY: help setup test verify-0 verify-1 verify-2 verify-3 verify-4 verify-5 verify-6 verify-7 verify-all watchdog status ping daily data recorder-install
 
 help:
 	@echo "make setup     - függőségek telepítése (uv sync)"
@@ -11,6 +11,8 @@ help:
 	@echo "make verify-4  - 4. fázis (induló populáció, L1-ítéletek) elfogadási ellenőrzés"
 	@echo "make verify-5  - 5. fázis (élő paper, riport, dashboard) elfogadási ellenőrzés"
 	@echo "make verify-6  - 6. fázis (kutató, fejlesztő, jóváhagyás, napi hurok) elfogadási ellenőrzés"
+	@echo "make verify-all - teljes ellenőrzés (7. fázis): tesztek, adat, paper, őr, bíró, hurok"
+	@echo "make watchdog  - folyamat-őr (csak kiírja a hibákat)"
 	@echo "make data      - Binance adat frissítése + rezsimcímkék"
 	@echo "make recorder-install - Hyperliquid rögzítő launchd-telepítése"
 	@echo "make status    - állapot"
@@ -126,3 +128,27 @@ verify-6:
 	@echo "== 5/5 napi futások: egymást követő sikeres napok (elfogadás: >= 7) =="
 	uv run python -c "from evolab.config import load_config; from evolab.evolve.health import daily_streak; n, t = daily_streak(load_config()); print(t.to_string(index=False)); print(f'  egymást követő sikeres napi futás: {n}/7', '-> KÉSZ' if n >= 7 else '-> még gyűjt')"
 	@echo "== 6. fázis ellenőrzés vége =="
+
+watchdog:
+	uv run evolab watchdog --dry-run
+
+verify-7: verify-all
+
+verify-all:
+	@echo "== 1/8 tesztek =="
+	uv run pytest
+	@echo "== 2/8 bíró: judge.yaml verzió és changelog =="
+	uv run python -c "from evolab.config import load_config; c = load_config(); print('judge.yaml verzió:', c.judge_version); [print('  ', e['version'], e['date'], e['change'][:90]) for e in c.judge['changelog']]"
+	@echo "== 3/8 launchd-feladatok =="
+	@launchctl list | grep evolutiontrader || echo "HIBA: nincs launchd feladat (ops/install-launchd.sh)"
+	@echo "== 4/8 őr: rögzítő, paper, napi futás, lemez =="
+	uv run evolab watchdog --dry-run
+	@echo "== 5/8 adat: gyertyák, checksum, regime_daily, rögzítő 24 óra =="
+	uv run evolab data check
+	@echo "== 6/8 rezsimcímkék: szabályalapú vs. HMM-variáns =="
+	uv run evolab regime --compare
+	@echo "== 7/8 paper vs. visszateszt, mért slippage =="
+	uv run evolab paper status
+	@echo "== 8/8 evolúciós hurok: hipotézisek, várólista, napi sorozat =="
+	@$(MAKE) --no-print-directory verify-6 2>&1 | sed -n '/== 3\/5/,$$p'
+	@echo "== teljes ellenőrzés vége =="
