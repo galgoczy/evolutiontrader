@@ -88,9 +88,12 @@ def ensure_roster(cfg: Config, now: int | None = None, reselect_shadow: bool = F
     strategies = roster["strategies"]
     if reselect_shadow:
         strategies = {k: v for k, v in strategies.items() if v["mode"] != "shadow"}
-    for sid in l2_strategies(cfg):
+    current_l2 = set(l2_strategies(cfg))
+    for sid in current_l2:
         if strategies.get(sid, {}).get("mode") != "L2":
             strategies[sid] = {"mode": "L2", "start_ms": start, "added": added}
+    for sid in [k for k, v in strategies.items() if v["mode"] == "L2" and k not in current_l2]:
+        roster.setdefault("ended", {})[sid] = {**strategies.pop(sid), "ended": added}  # visszaléptetve
     if not any(v["mode"] == "shadow" for v in strategies.values()):
         for sid in shadow_candidates(cfg, int(cfg.lab["paper"]["shadow_top_n"])):
             strategies.setdefault(sid, {"mode": "shadow", "start_ms": start, "added": added})

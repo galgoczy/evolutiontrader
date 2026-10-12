@@ -1,0 +1,15 @@
+#!/bin/bash
+# Fejlesztői homokozó (docs/02-specifikacio.md 6.3): az evolve/H-* ágakon csak a
+# src/evolab/strategy/families/ alatti .py fájlok commitolhatók. Más ágon nem csinál semmit.
+branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
+case "$branch" in
+  evolve/H-*) ;;
+  *) exit 0 ;;
+esac
+bad="$(git diff --cached --name-only | grep -v -E '^src/evolab/strategy/families/.+\.py$')"
+if [ -n "$bad" ]; then
+  echo "ELUTASÍTVA ($branch): csak a src/evolab/strategy/families/ alá lehet írni. Tiltott:" >&2
+  echo "$bad" >&2
+  exit 1
+fi
+exit 0

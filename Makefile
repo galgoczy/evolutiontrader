@@ -1,5 +1,5 @@
 # EvolutionTrader - fázis-ellenőrzések. Használat: make verify-0
-.PHONY: help setup test verify-0 verify-1 verify-2 verify-3 verify-4 verify-5 status ping daily data recorder-install
+.PHONY: help setup test verify-0 verify-1 verify-2 verify-3 verify-4 verify-5 verify-6 status ping daily data recorder-install
 
 help:
 	@echo "make setup     - függőségek telepítése (uv sync)"
@@ -10,6 +10,7 @@ help:
 	@echo "make verify-3  - 3. fázis (bíró) elfogadási ellenőrzés"
 	@echo "make verify-4  - 4. fázis (induló populáció, L1-ítéletek) elfogadási ellenőrzés"
 	@echo "make verify-5  - 5. fázis (élő paper, riport, dashboard) elfogadási ellenőrzés"
+	@echo "make verify-6  - 6. fázis (kutató, fejlesztő, jóváhagyás, napi hurok) elfogadási ellenőrzés"
 	@echo "make data      - Binance adat frissítése + rezsimcímkék"
 	@echo "make recorder-install - Hyperliquid rögzítő launchd-telepítése"
 	@echo "make status    - állapot"
@@ -112,3 +113,16 @@ verify-5:
 	@echo "== 5/5 napi riport + dashboard =="
 	uv run evolab report
 	@echo "== 5. fázis: KÉSZ (a végleges paper = visszateszt ellenőrzés 30 nap paper után) =="
+
+verify-6:
+	@echo "== 1/5 tesztek (test_researcher_schema, test_developer_sandbox is) =="
+	uv run pytest
+	@echo "== 2/5 homokozó: git pre-commit hook bekapcsolva =="
+	@test "$$(git config --get core.hooksPath)" = "ops/hooks" && echo "  OK core.hooksPath = ops/hooks" || (git config core.hooksPath ops/hooks && echo "  bekapcsolva most: core.hooksPath = ops/hooks")
+	@echo "== 3/5 hipotézisek és ledger-soraik (utolsó 20) =="
+	uv run python -c "from evolab.config import load_config; from evolab.evolve.health import hypotheses_summary; print(hypotheses_summary(load_config()).to_string(index=False))"
+	@echo "== 4/5 létra: várólista =="
+	uv run python -c "from evolab.config import load_config; from evolab.cli import waiting_text; print(waiting_text(load_config()))"
+	@echo "== 5/5 napi futások: egymást követő sikeres napok (elfogadás: >= 7) =="
+	uv run python -c "from evolab.config import load_config; from evolab.evolve.health import daily_streak; n, t = daily_streak(load_config()); print(t.to_string(index=False)); print(f'  egymást követő sikeres napi futás: {n}/7', '-> KÉSZ' if n >= 7 else '-> még gyűjt')"
+	@echo "== 6. fázis ellenőrzés vége =="
