@@ -1,9 +1,10 @@
 # VÉDETT FÁJL. Csak dátumozott, emberi jóváhagyású módosítással változhat
 # (version emelés + changelog bejegyzés). LLM-réteg (kutató, fejlesztő) nem írhatja.
-version: 2
+version: 3
 changelog:
   - {version: 1, date: "2026-10-10", change: "Induló küszöbök a docs/02-specifikacio.md 5.6 szerint."}
   - {version: 2, date: "2026-10-12", change: "L1_backtest.regime_min_trades = 5: egy trend×vol kombináció csak legalább 5 belépéssel számít pozitívnak a rezsim-kapuban. Jóváhagyta: a felhasználó (2026-10-12)."}
+  - {version: 3, date: "2026-10-12", change: "cpcv.min_hypothesis_variants = 4: a PBO csak legalább 4 variánsú hipotézisnél számol a hipotézis variánsain, különben a teljes családon (2-3 hasonló variánsnál a rangsor zaj). Jóváhagyta: a felhasználó (2026-10-12, (c) változat)."}
 
 L1_backtest:
   min_trades: 100
@@ -33,6 +34,6 @@ population: {size: 50, max: 100, cull_bottom_pct: 20, diversity_corr_max: 0.8}
 holdout: {months: 6, rolling: true}
 
 walkforward: {is_months: 12, oos_months: 3, step_months: 3}
-cpcv: {n_blocks: 8, k_test: 2, purge_days: 7, embargo_days: 3}
+cpcv: {n_blocks: 8, k_test: 2, purge_days: 7, embargo_days: 3, min_hypothesis_variants: 4}  # v3
 dsr: {trial_window_days: 90, effective_trials: eigen}
 diversity: {corr_max: 0.8, dsr_penalty: 0.9}

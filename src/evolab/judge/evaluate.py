@@ -4,7 +4,8 @@ Menet (minden a holdout-zár alatt betöltött, azonos adaton):
 1. alapfutás 1x, 2x, 3x költséggel (ugyanaz a jel) -> mutatók, költségérzékenység;
 2. walk-forward az 1x gyertyahozamon;
 3. paraméter-stabilitás: minden numerikus paraméter ±perturb_pct% -> külön futás (ledger-sor);
-4. PBO: az azonos hipotézis variánsai, ha csak egy van, a család összes variánsa (ledger-sorok);
+4. PBO: az azonos hipotézis variánsai, ha legalább `cpcv.min_hypothesis_variants` van, különben a család
+   összes variánsa (ledger-sorok);
 5. DSR: a család elmúlt `dsr.trial_window_days` napi kísérletei (különböző konfigurációk) alapján;
 6. kapuk (`gates.check_l1`) -> egyetlen ledger-sor minden mezővel.
 """
@@ -38,8 +39,9 @@ def perturbations(params: dict, pct: float) -> dict[str, dict]:
     return out
 
 
-def family_members(strat: registry.LoadedStrategy, root: Path) -> list[str]:
-    """A PBO variáns-családja: azonos hipotézis variánsai, ha >1 van, különben a család összes variánsa."""
+def family_members(strat: registry.LoadedStrategy, root: Path, min_variants: int = 2) -> list[str]:
+    """A PBO variáns-családja: az azonos hipotézis variánsai, ha legalább `min_variants` van
+    (`judge.yaml` cpcv.min_hypothesis_variants, v3), különben a család összes variánsa."""
     same_family = []
     for sid, path in registry.discover(root).items():
         try:
@@ -50,7 +52,7 @@ def family_members(strat: registry.LoadedStrategy, root: Path) -> list[str]:
             same_family.append(other)
     hyp = strat.meta.hypothesis_id
     same_hyp = [s for s in same_family if hyp and s.meta.hypothesis_id == hyp]
-    chosen = same_hyp if len(same_hyp) > 1 else same_family
+    chosen = same_hyp if len(same_hyp) >= max(2, min_variants) else same_family
     return [s.meta.id for s in chosen]
 
 
@@ -91,7 +93,7 @@ def evaluate_l1(cfg: Config, strategy_id: str, today: dt.date | None = None,
 
     # 4. PBO a variáns-családon
     rets = {strategy_id: metrics.daily_returns(res.equity, res.initial_capital)}
-    for sid in family_members(strat, strategies_root):
+    for sid in family_members(strat, strategies_root, j["cpcv"]["min_hypothesis_variants"]):
         if sid in rets:
             continue
         other_tf = registry.load(sid, strategies_root).meta.timeframe

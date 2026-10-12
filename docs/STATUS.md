@@ -92,8 +92,8 @@
 - A napi futás mind a 6 lépése valódi: data → judge → report → researcher → developer → ladder.
 - Első valódi kör (2026-10-12, kézzel): 3 hipotézis (szűrő, rezsimfeltétel, paraméter), 6 variáns, mind elbukott L1-en. A `volbreak-h2026101203-v2` (szélesebb stop) csak a PBO-n bukott (0,61), ami 2 hasonló variánsnál inkább zaj.
 
-## Nyitott kérdés (felhasználói döntés)
-4. PBO kis variánscsaládon: ha egy hipotézisnek csak 2-3, egymáshoz nagyon hasonló variánsa van, a PBO közel véletlen (~0,5), és egy egyébként minden kapun átmenő variánst is megfoghat. Lehetőségek: (a) marad; (b) a PBO a hipotézis variánsai helyett mindig a teljes családon számol; (c) legalább N (pl. 4) variáns alatt a család-szintű PBO-t használja. Bírói kérdés (`judge.yaml`/`judge/`), csak emberi döntéssel.
+## Döntés (2026-10-12)
+4. PBO kis variánscsaládon: **(c)** – 4 variáns alatt a család-szintű PBO (`judge.yaml` v3). Ezzel a `volbreak-h2026101203-v2` átment L1-en: az első várólistás jelölt (jóváhagyás: Telegram `/approve volbreak-h2026101203-v2`).
 
 ## Teendő
 - A merge után 7 egymást követő éjszaka: `make verify-6` → „egymást követő sikeres napi futás: 7/7”.

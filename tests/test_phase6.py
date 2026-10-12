@@ -147,7 +147,7 @@ def _fake_llm(source_fn):
 def test_developer_writes_variants_judges_and_cleans_up(cfg, tmp_path):
     make_repo(cfg.root)
     today = write_env(cfg, n=3000, symbols=("BTCUSDT", "ETHUSDT", "SOLUSDT"))
-    h = _saved_hypothesis(cfg, param_grid={"atr_stop": [2.0, 3.0]})
+    h = _saved_hypothesis(cfg, param_grid={"atr_stop": [2.0, 3.0], "atr_n": [10, 14]})  # 4 variáns: saját PBO
 
     def write(target, wt):
         target.write_text(mutations.condition_on_regime(h.parent_strategy_id, h.expected_regimes, h.id, h.rationale,
@@ -155,17 +155,16 @@ def test_developer_writes_variants_judges_and_cleans_up(cfg, tmp_path):
 
     r = developer.develop(cfg, h, today=today, run_llm=_fake_llm(write), merge=False)
     assert r.status in ("developed_pass", "developed_fail"), r.message
-    assert r.variants == ["trend-h2026101301-v1", "trend-h2026101301-v2"]
+    assert r.variants == [f"trend-h2026101301-v{k}" for k in range(1, 5)]
     assert set(r.verdicts) == set(r.variants)
     files = _git(cfg.root, "show", "--name-only", "--format=", "evolve/H-2026-10-13-01").stdout.split()
-    assert files == ["src/evolab/strategy/families/trend/h2026101301_v1.py",
-                     "src/evolab/strategy/families/trend/h2026101301_v2.py"]
+    assert files == [f"src/evolab/strategy/families/trend/h2026101301_v{k}.py" for k in range(1, 5)]
     assert not (cfg.path("data") / "worktrees" / h.id).exists()  # a worktree eltakarítva
     with connect(cfg.db_path) as conn:
         assert conn.execute("SELECT status FROM hypotheses").fetchone()["status"] == r.status
         rows = conn.execute("SELECT gate_result FROM trials WHERE strategy_id LIKE 'trend-h2026101301-%' "
                             "AND gate_result IN ('pass','fail')").fetchall()
-    assert len(rows) == 2
+    assert len(rows) == 4
 
 
 def test_developer_rejects_write_outside_families(cfg):
@@ -200,10 +199,10 @@ def test_developer_rejects_lookahead(cfg):
 def test_param_mutation_needs_no_llm(cfg):
     make_repo(cfg.root)
     today = write_env(cfg, n=3000, symbols=("BTCUSDT", "ETHUSDT", "SOLUSDT"))
-    h = _saved_hypothesis(cfg, mutation_type="param", param_grid={"fast": [15, 25]})
+    h = _saved_hypothesis(cfg, mutation_type="param", param_grid={"fast": [15, 25], "slow": [80, 120]})
     r = developer.develop(cfg, h, today=today, run_llm=lambda *a: pytest.fail("LLM nem kellett volna"),
                           merge=False)
-    assert r.status in ("developed_pass", "developed_fail") and len(r.variants) == 2
+    assert r.status in ("developed_pass", "developed_fail") and len(r.variants) == 4
 
 
 def test_merge_only_when_clean_on_main(tmp_path):
