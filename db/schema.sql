@@ -114,3 +114,13 @@ CREATE TABLE IF NOT EXISTS regime_daily (
     positioning TEXT NOT NULL CHECK (positioning IN ('crowded_long','crowded_short','neutral')),
     PRIMARY KEY (date, symbol)
 );
+
+-- Rezsimcímkék HMM-variánsa (7. fázis, spec 2.4): ugyanaz a szerkezet, mint a regime_daily
+CREATE TABLE IF NOT EXISTS regime_daily_hmm (
+    date        TEXT NOT NULL,
+    symbol      TEXT NOT NULL,
+    trend       TEXT NOT NULL CHECK (trend IN ('up','down','flat')),
+    vol         TEXT NOT NULL CHECK (vol IN ('low','mid','high')),
+    positioning TEXT NOT NULL CHECK (positioning IN ('crowded_long','crowded_short','neutral')),
+    PRIMARY KEY (date, symbol)
+);

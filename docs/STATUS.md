@@ -8,8 +8,8 @@
 | 3 Bíró | **kész** (2026-10-11) | `make verify-3` zöld; PR #4 merge-ölve (emberi jóváhagyással) |
 | 4 Induló populáció | **kész** (2026-10-11) | `make verify-4` zöld; 40 variáns ítélettel, 0 ment át L1-en; PR #5 |
 | 5 Élő paper | **kész, a 30 napos egyezés-ellenőrzés fut** (2026-10-12) | `make verify-5` zöld; árnyék-paper 10 variánssal 2026-10-12 00:00 UTC-től; PR #6 merge-ölve |
-| 6 Hurok | **kész, a 7 napos elfogadás gyűjt** (2026-10-12) | `make verify-6` zöld a tesztekre; a teljes napi hurok első éjszakája a merge után; PR #7 |
-| 7 Stabilizálás | nem kezdődött | |
+| 6 Hurok | **kész, a 7 napos elfogadás gyűjt** (2026-10-12) | `make verify-6` zöld a tesztekre; PR #7 és #8 (bíró v3) merge-ölve; a 7 napos sorozat 2026-10-13-tól |
+| 7 Stabilizálás | **kész** (2026-10-12) | `make verify-all` zöld; diverzitás, HMM-variáns, őr, üzemeltetési útmutató; PR #9 |
 
 ## 0. fázis – mi készült
 - `pyproject.toml` (uv, Python 3.12), `config/{lab,judge,families}.yaml`, `db/schema.sql` (append-only `trials` és `ladder_events`).
@@ -97,3 +97,15 @@
 
 ## Teendő
 - A merge után 7 egymást követő éjszaka: `make verify-6` → „egymást követő sikeres napi futás: 7/7”.
+
+## 7. fázis – stabilizálás (2026-10-12)
+- Diverzitás-büntetés (`judge/diversity.py`): rangsor a riportban, korrelációs hőtérkép a dashboardon.
+- HMM rezsimcímkéző-variáns (`features/regime_hmm.py`, `regime_daily_hmm`), `evolab regime --compare`: a szabályalapú címke jelenleg jobban különít el (3,30 vs. 2,54 pozitív kombináció).
+- Őr (`notify/watchdog.py`): óránként, Telegram-riasztás rögzítő/paper/napi futás/lemez hibára.
+- Dokumentáció: `docs/UZEMELTETES.md` (üzemeltetés), README; `make verify-all`.
+- Első várólistás jelölt: `volbreak-h2026101203-v2` (jóváhagyás: Telegram `/approve volbreak-h2026101203-v2`).
+
+## A 8 hetes terv után (nyitott)
+- 6. fázis elfogadása: 7 egymást követő sikeres éjszakai hurok (`make verify-6`).
+- 5. fázis végleges paper = visszateszt ellenőrzése és a slippage-modell döntése ~2026-11-11 (30 nap paper).
+- L3 mikro-éles végrehajtó (`live/executor.py`): külön specifikáció, amikor az első egyed eléri az L2 kapuját (200 paper-kötés).
