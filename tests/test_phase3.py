@@ -284,3 +284,19 @@ def test_family_trials_dedupe_by_config(cfg):
         ledger.record(cfg, r)
     got = ledger.family_trials(cfg, "trend", 90)
     assert len(got) == 3 and ledger.trial_returns(got).shape[1] == 0  # kimenet nélkül nincs hozamsor
+
+
+def test_pbo_family_falls_back_below_min_hypothesis_variants(cfg, tmp_path):
+    """judge.yaml v3: 4-nél kevesebb variánsú hipotézisnél a PBO a teljes családon számol."""
+    from evolab.judge.evaluate import family_members
+
+    root = tmp_path / "families"
+    ids = write_variants(root, [{"fast": f, "slow": 100, "atr_n": 14, "atr_stop": 3.0} for f in (10, 20, 30, 40, 50)])
+    for k, sid in enumerate(ids[:2], start=1):  # az első kettő egy saját hipotézishez tartozik
+        f = root / "trend" / f"ema_cross_4h_{k:02d}.py"
+        f.write_text(f.read_text(encoding="utf-8").replace("hypothesis_id: H-seed-trend-ema", "hypothesis_id: H-uj"),
+                     encoding="utf-8")
+    strat = registry.load(ids[0], root)
+    assert cfg.judge["cpcv"]["min_hypothesis_variants"] == 4
+    assert family_members(strat, root, 4) == ids          # 2 < 4 -> a teljes család (5)
+    assert family_members(strat, root, 2) == ids[:2]      # 2 >= 2 -> a hipotézis variánsai
