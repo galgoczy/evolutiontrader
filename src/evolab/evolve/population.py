@@ -19,9 +19,9 @@ from evolab import backtest
 from evolab.config import Config
 from evolab.db import connect
 from evolab.judge.evaluate import evaluate_l1
+from evolab.judge.gates import positive_regimes
 from evolab.strategy import registry
 
-REGIME_MIN_TRADES_PROBE = 10  # csak tájékoztató oszlop a riportban (nyitott kérdés, nem kapu)
 
 
 def seed(cfg: Config, today: dt.date | None = None, root: Path = registry.FAMILIES_DIR, log=print) -> list[dict]:
@@ -54,17 +54,16 @@ def latest_verdicts(cfg: Config) -> pd.DataFrame:
     return df.groupby("strategy_id").tail(1).reset_index(drop=True)
 
 
-def _row(r: pd.Series) -> dict:
+def _row(r: pd.Series, min_trades: int) -> dict:
     m = json.loads(r["is_metrics_json"])
     wf = json.loads(r["wf_metrics_json"] or "{}")
     reg = m.get("regime_ev", {})
     return {
-        "strategy_id": r["strategy_id"], "family": r["family"], "result": r["gate_result"],
+        "strategy_id": r["strategy_id"], "family": r["family"], "result": r["gate_result"], "judge_version": int(r["judge_version"]),
         "trades": m["trades"], "pf_1x": m["profit_factor"], "pf_2x": m["pf_2x"], "max_dd_pct": 100 * m["max_dd"],
         "oos_is": wf.get("oos_is_ratio"), "dsr": r["dsr"], "pbo": r["pbo"],
-        "regimes_pos": sum(1 for v in reg.values() if v["ev"] > 0),
-        f"regimes_pos_min{REGIME_MIN_TRADES_PROBE}": sum(
-            1 for v in reg.values() if v["ev"] > 0 and v["trades"] >= REGIME_MIN_TRADES_PROBE),
+        "regimes_pos": positive_regimes(reg, min_trades),           # a kapu szerinti szám
+        "regimes_pos_any": positive_regimes(reg, 1),                 # tájékoztató: minimum nélkül
         "failures": "; ".join(json.loads(r["gate_failures"] or "[]")),
     }
 
@@ -74,7 +73,7 @@ def report(cfg: Config) -> tuple[pd.DataFrame, pd.DataFrame]:
     v = latest_verdicts(cfg)
     if v.empty:
         return pd.DataFrame(), pd.DataFrame()
-    table = pd.DataFrame([_row(r) for _, r in v.iterrows()]).sort_values(["family", "strategy_id"])
+    table = pd.DataFrame([_row(r, cfg.judge['L1_backtest']['regime_min_trades']) for _, r in v.iterrows()]).sort_values(["family", "strategy_id"])
     fam = table.groupby("family").agg(variants=("strategy_id", "count"),
                                       passed=("result", lambda s: int((s == "pass").sum()))).reset_index()
     expected = {f: c["initial_variants"] for f, c in cfg.families["families"].items()}

@@ -168,7 +168,7 @@ def test_walkforward_windows_and_ratio():
 
 def _ev(**over):
     ev = {"metrics": {"status": "ok", "trades": 150, "max_dd": 0.1,
-                      "regime_ev": {"up/high": {"trades": 10, "ev": 1.0}, "down/high": {"trades": 9, "ev": 2.0}}},
+                      "regime_ev": {"up/high": {"trades": 10, "ev": 1.0}, "down/high": {"trades": 5, "ev": 2.0}}},
           "pf_2x": 1.5, "walkforward": {"oos_is_ratio": 0.8}, "dsr": {"dsr": 0.97}, "pbo": {"pbo": 0.1},
           "param_stability": {"negative": []}}
     ev.update(over)
@@ -185,6 +185,8 @@ def test_gates_pass_and_each_failure(cfg):
         "PBO 0.20": {"pbo": {"pbo": 0.2}},
         "PBO nem számolható": {"pbo": {"pbo": None, "reason": "x"}},
         "rezsim": {"metrics": {**_ev()["metrics"], "regime_ev": {"up/high": {"trades": 5, "ev": 1.0}}}},
+        "min. 5 kötés": {"metrics": {**_ev()["metrics"], "regime_ev": {"up/high": {"trades": 40, "ev": 1.0},
+                                                                        "down/high": {"trades": 4, "ev": 9.0}}}},
         "paraméter-stabilitás": {"param_stability": {"negative": ["fast+20%"]}},
         "max DD": {"metrics": {**_ev()["metrics"], "max_dd": 0.26}},
         "failed": {"metrics": {**_ev()["metrics"], "status": "failed"}},

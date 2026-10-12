@@ -70,4 +70,4 @@
 ## Döntések és nyitott kérdés (2026-10-11)
 1. „2x költség” kapu: díj + slippage duplázva – **eldöntve, marad**.
 2. Slippage-modell: változatlan, az 5. fázis paper-mérése után újra – **eldöntve**.
-3. Rezsim-kapu kötésszám-minimuma: **nyitott**. Újra elő kerül, ha egy variáns csak egy vékony (< 10 kötéses) pozitív kombináció miatt menne át a rezsim-kapun (a riport `regimes_pos_min10` oszlopa figyeli).
+3. Rezsim-kapu kötésszám-minimuma: **5 kötés** (2026-10-12, `judge.yaml` v2) – eldöntve, „egyelőre”.

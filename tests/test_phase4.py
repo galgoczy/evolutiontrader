@@ -107,5 +107,6 @@ def test_population_report_latest_verdict_per_strategy(cfg):
     table, fam = population.report(cfg)
     assert table.set_index("strategy_id").loc["trend-x", "result"] == "pass"  # a legutolsó ítélet számít
     assert fam.set_index("family").loc["trend", "passed"] == 1
-    assert table.set_index("strategy_id").loc["trend-x", "regimes_pos_min10"] == 1  # a 3 kötéses nem számít
+    row = table.set_index("strategy_id").loc["trend-x"]
+    assert row["regimes_pos"] == 1 and row["regimes_pos_any"] == 2  # a 3 kötéses (< 5) a kapunál nem számít
     assert "| strategy_id |" in population.md_table(table)

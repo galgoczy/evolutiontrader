@@ -7,12 +7,18 @@ Az L1 visszateszt-kapu feltételei (mind kell):
 - walk-forward OOS/IS arány >= oos_is_ratio_min
 - DSR > dsr_min
 - PBO < pbo_max (ha nem számolható, a kapu elbukik: nincs bizonyíték a túlillesztés ellen)
-- legalább regimes_positive_min trend×vol kombinációban pozitív várható érték (belépéskori címke)
+- legalább regimes_positive_min trend×vol kombinációban pozitív várható érték (belépéskori címke);
+  csak a legalább regime_min_trades kötésű kombináció számít (judge.yaml v2)
 - paraméter-stabilitás: minden ±perturb_pct% paraméterváltozat nettó eredménye pozitív
 - a futás nem állt le heti DD-megszakítóval (`failed`)
 """
 
 from __future__ import annotations
+
+
+def positive_regimes(regime_ev: dict, min_trades: int) -> int:
+    """Pozitív átlagú trend×vol kombinációk száma, csak a legalább `min_trades` kötésűek."""
+    return sum(1 for v in regime_ev.values() if v["ev"] > 0 and v["trades"] >= min_trades)
 
 
 def check_l1(ev: dict, judge_cfg: dict) -> tuple[str, list[str]]:
@@ -36,9 +42,10 @@ def check_l1(ev: dict, judge_cfg: dict) -> tuple[str, list[str]]:
         fails.append(f"PBO nem számolható ({ev['pbo'].get('reason', '')})")
     elif not p < g["pbo_max"]:
         fails.append(f"PBO {p:.2f} >= {g['pbo_max']}")
-    n_pos = sum(1 for v in m["regime_ev"].values() if v["ev"] > 0)
+    n_pos = positive_regimes(m["regime_ev"], g["regime_min_trades"])
     if n_pos < g["regimes_positive_min"]:
-        fails.append(f"pozitív rezsim-kombináció {n_pos} < {g['regimes_positive_min']}")
+        fails.append(f"pozitív rezsim-kombináció (min. {g['regime_min_trades']} kötés) {n_pos} "
+                     f"< {g['regimes_positive_min']}")
     st = ev["param_stability"]
     if g["param_stability"]["must_stay_positive"] and st["negative"]:
         fails.append(f"paraméter-stabilitás: negatív lett {', '.join(st['negative'])}")

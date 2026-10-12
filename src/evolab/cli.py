@@ -241,8 +241,8 @@ def cmd_population(args: argparse.Namespace) -> int:
     print("L1 családonként:")
     print(fam.to_string(index=False))
     print(f"Összesen: {int(fam['passed'].sum())}/{int(fam['variants'].sum())} variáns ment át L1-en.")
-    cols = ["strategy_id", "result", "trades", "pf_2x", "max_dd_pct", "oos_is", "dsr", "pbo", "regimes_pos",
-            f"regimes_pos_min{population.REGIME_MIN_TRADES_PROBE}"]
+    cols = ["strategy_id", "result", "judge_version", "trades", "pf_2x", "max_dd_pct", "oos_is", "dsr", "pbo",
+            "regimes_pos", "regimes_pos_any"]
     print(table[cols].to_string(index=False, float_format=lambda v: f"{v:.2f}"))
     print(f"Riport: {path}")
     return 0

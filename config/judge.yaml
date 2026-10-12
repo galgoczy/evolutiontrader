@@ -1,8 +1,9 @@
 # VÉDETT FÁJL. Csak dátumozott, emberi jóváhagyású módosítással változhat
 # (version emelés + changelog bejegyzés). LLM-réteg (kutató, fejlesztő) nem írhatja.
-version: 1
+version: 2
 changelog:
   - {version: 1, date: "2026-10-10", change: "Induló küszöbök a docs/02-specifikacio.md 5.6 szerint."}
+  - {version: 2, date: "2026-10-12", change: "L1_backtest.regime_min_trades = 5: egy trend×vol kombináció csak legalább 5 belépéssel számít pozitívnak a rezsim-kapuban. Jóváhagyta: a felhasználó (2026-10-12)."}
 
 L1_backtest:
   min_trades: 100
@@ -12,6 +13,7 @@ L1_backtest:
   dsr_min: 0.95
   pbo_max: 0.20
   regimes_positive_min: 2
+  regime_min_trades: 5        # v2: ennél kevesebb kötésű kombináció nem számít
   param_stability: {perturb_pct: 20, must_stay_positive: true}
 L1_holdout:                 # egyszer futtatható variánsonként
   pf_min: 1.1
