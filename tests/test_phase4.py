@@ -26,6 +26,7 @@ def _one(close, symbol="BTCUSDT", **extra):
 
 def test_population_matches_families_config(cfg):
     loaded = [registry.load_file(p) for p in registry.discover().values()]
+    loaded = [s for s in loaded if (s.meta.hypothesis_id or "").startswith("H-seed")]  # az induló populáció
     counts = Counter(s.meta.family for s in loaded)
     assert dict(counts) == {f: c["initial_variants"] for f, c in cfg.families["families"].items()}
     assert sum(counts.values()) == cfg.lab["population"]["initial"] == 40
