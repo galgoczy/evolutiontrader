@@ -126,3 +126,29 @@ def test_watchdog_quiet_when_healthy_and_respects_stop(cfg):
     _runs(cfg, iso(9), iso(10))
     cfg.stop_file.write_text("")
     assert watchdog.problems(cfg, now, disk_free_gb=100.0) == {}   # STOP: a paper szándékosan áll
+
+
+def test_dashboard_server_serves_only_index(tmp_path):
+    import threading
+    import urllib.error
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    from evolab.report.serve import make_handler
+
+    page = tmp_path / "index.html"
+    page.write_text("<h1>EvolutionTrader</h1>", encoding="utf-8")
+    (tmp_path / "2026-10-14.json").write_text("{}")
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(page))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        for path in ("/", "/index.html?x=1"):
+            with urllib.request.urlopen(base + path) as r:
+                assert r.status == 200 and b"EvolutionTrader" in r.read()
+        for path in ("/2026-10-14.json", "/../data/lab.db", "/reports/index.html", "/.env"):
+            with pytest.raises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(base + path)
+            assert e.value.code == 404
+    finally:
+        srv.shutdown()

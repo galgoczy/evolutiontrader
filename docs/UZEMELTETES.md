@@ -10,12 +10,14 @@ Az első sor mindig belép a repó mappájába (a mappanévben szóköz van, ez�
 | `com.evolutiontrader.recorder` | folyamatosan | percenként menti a Hyperliquid árakat, OI-t, fundingot | `~/Library/Logs/evolutiontrader/recorder.out.log` |
 | `com.evolutiontrader.paper` | óránként :03-kor | Telegram-parancsok, élő paper könyvelése, őr (riasztás) | `logs/paper.log` |
 | `com.evolutiontrader.daily` | naponta 02:00 | adat → bíró → riport → kutató → fejlesztő → létra, Telegram-összefoglaló | `logs/daily.log` |
+| `com.evolutiontrader.dashboard` | folyamatosan | a dashboard kiszolgálása helyben (127.0.0.1:8790), csak az `index.html` | `~/Library/Logs/evolutiontrader/dashboard.err.log` |
+| `com.evolutiontrader.tunnel` | folyamatosan | Cloudflare-tunnel: **https://evo.zentopia.hu** → a helyi dashboard | `~/Library/Logs/evolutiontrader/tunnel.err.log` |
 
 Állapotuk:
 ```
 launchctl list | grep evolutiontrader
 ```
-Három sor kell. A második oszlop `0` (vagy a rögzítőnél `143` egy kézi újraindítás után) jó; más szám hibát jelez – nézd meg a naplót.
+Öt sor kell. A második oszlop `0` (vagy a rögzítőnél `143` egy kézi újraindítás után) jó; más szám hibát jelez – nézd meg a naplót.
 
 Feltétel: a Mac mini bekapcsolva, a felhasználó automatikusan bejelentkezik, a külső lemez csatolva.
 
@@ -44,9 +46,12 @@ A várólista 14 nap után lejár. Visszaléptetés (pl. rossz paper-eredmény) 
 
 ## Dashboard és riport
 
+Bárhonnan: **https://evo.zentopia.hu** (a napi futás 02:00 után frissíti). A gépen helyben:
 ```
 open "/Volumes/Mac Nvme Extended/Github/evolutiontrader/reports/index.html"
 ```
+A tunnel újrabeállítása (pl. másik címre): `bash ops/setup-tunnel.sh evo.zentopia.hu`.
+Az oldal nyilvános; a hozzáférés korlátozása a Cloudflare Zero Trust felületén (Access-alkalmazás e-mailes belépéssel) állítható be.
 A napi riport szövegesen: `reports/ÉÉÉÉ-HH-NN.md`. Kézi frissítés: `uv run evolab report`.
 
 ## Vészleállítás (STOP)

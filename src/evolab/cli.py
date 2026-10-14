@@ -430,6 +430,16 @@ def cmd_watchdog(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dashboard_serve(args: argparse.Namespace) -> int:
+    from evolab.report.serve import serve
+
+    cfg = load_config()
+    page = cfg.path("reports") / "index.html"
+    print(f"Dashboard: http://127.0.0.1:{args.port}/ ({page})", flush=True)
+    serve(page, "127.0.0.1", args.port)
+    return 0
+
+
 def cmd_recorder(args: argparse.Namespace) -> int:
     from evolab.live import recorder
 
@@ -518,6 +528,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("watchdog", help="folyamat-őr: rögzítő, paper, napi futás, lemez (óránként, Telegram)")
     sp.add_argument("--dry-run", action="store_true", help="csak kiírja a hibákat, nem küld üzenetet")
     sp.set_defaults(func=cmd_watchdog)
+
+    sp = sub.add_parser("dashboard-serve", help="a dashboard helyi kiszolgálása (csak 127.0.0.1, a tunnel mögé)")
+    sp.add_argument("--port", type=int, default=8790)
+    sp.set_defaults(func=cmd_dashboard_serve)
 
     sp = sub.add_parser("daily", help="napi futás (launchd hívja 02:00-kor)")
     sp.add_argument("--step", choices=DAILY_STEPS, default=None, help="csak egy lépés futtatása")
