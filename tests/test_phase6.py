@@ -58,6 +58,15 @@ def test_researcher_schema(cfg):
     assert len(rejected) == 9
 
 
+def test_researcher_allows_mentioning_gates_but_not_changing_them(cfg):
+    ok, rejected = researcher.validate([
+        hyp(rationale=LONG + " A szülő a költségérzékenységi kapun bukik, a szűrő ezen javíthat."),
+        hyp(change="A DSR-küszöb lazítása 0,9-re, mert a kapu túl szigorú a trendcsaládra."),
+        hyp(change="A trendjel csak magas vol mellett; a kapuk és küszöbök változatlanok."),
+    ], cfg, TODAY, max_n=5)
+    assert len(ok) == 2 and len(rejected) == 1 and "kapu/küszöb" in rejected[0]["reason"]
+
+
 def test_researcher_requires_non_param_mutation(cfg):
     raw = [hyp(mutation_type="param", param_grid={"fast": [10, 30]}), hyp(mutation_type="param")]
     ok, rejected = researcher.validate(raw, cfg, TODAY)

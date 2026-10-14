@@ -33,7 +33,10 @@ REGIME_RE = re.compile(r"^(up|down|flat)/(low|mid|high)$")
 FORBIDDEN = [
     (re.compile(r"holdout", re.I), "holdout-hivatkozás"),
     (re.compile(r"\bpaper\w*", re.I), "paper-időszakra hivatkozás"),
-    (re.compile(r"judge\.yaml|\bkapu\w*|bírói\s+küszöb|DSR-küszöb|PBO-küszöb", re.I), "kapu/küszöb módosítása"),
+    # csak a kapu/küszöb MÓDOSÍTÁSÁNAK javaslata tilos; a kapura mint mércére hivatkozni szabad
+    (re.compile(r"judge\.yaml|\b(?:kapu|küszöb)\w*[^.]{0,60}?\b(?:módosít|csökkent|emel|lazít|változtat|kikapcsol"
+                r"|átír|megszüntet|töröl)\w*|\b(?:módosít|csökkent|emel|lazít|változtat|kikapcsol|átír|megszüntet|töröl)"
+                r"\w*[^.]{0,60}?\b(?:kapu|küszöb|bírói)\w*", re.I), "kapu/küszöb módosítása"),
     (re.compile(r"visszateszt\w*\s+(?:\w+\s+){0,3}(jó|szép|kiváló|nyereséges|pozitív)|backtest", re.I),
      "„jó a visszateszt” indoklás"),
 ]
