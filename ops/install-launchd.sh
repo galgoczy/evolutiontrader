@@ -3,6 +3,8 @@
 #   com.evolutiontrader.daily     napi 02:00-s futás
 #   com.evolutiontrader.recorder  Hyperliquid rögzítő, folyamatosan (KeepAlive)
 #   com.evolutiontrader.paper     élő paper, óránként :03-kor
+#   com.evolutiontrader.dashboard dashboard 127.0.0.1:8790 (KeepAlive)
+#   com.evolutiontrader.tunnel    Cloudflare-tunnel evo.zentopia.hu (ops/setup-tunnel.sh állítja be)
 # Csak az egyiket: ops/install-launchd.sh recorder   (vagy: daily)
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -21,6 +23,8 @@ install_one() {
         -e "s|__UV__|$(esc "$UV")|g" \
         -e "s|__LOGDIR__|$(esc "$LOGDIR")|g" \
         -e "s|__PATHDIR__|$(esc "$(dirname "$UV")")|g" \
+        -e "s|__HOME__|$(esc "$HOME")|g" \
+        -e "s|__CLOUDFLARED__|$(esc "$(command -v cloudflared || echo /opt/homebrew/bin/cloudflared)")|g" \
         "$REPO/ops/launchd/$LABEL.plist.template" > "$DEST"
     plutil -lint "$DEST"
     launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true

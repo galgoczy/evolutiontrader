@@ -88,6 +88,7 @@ A specifikációban nem rögzített, megvalósítás közben hozott döntések. 
 | 2026-10-12 | 7 | `make verify-all` (= `verify-7`): tesztek, bíró-verzió, launchd, őr, adat, rezsim-összevetés, paper, hurok – a nehéz újraszámolás (`population seed`) és a Telegram-ping nélkül. Üzemeltetési útmutató: `docs/UZEMELTETES.md`. | Gyorsan futtatható teljes állapotkép. |
 | 2026-10-14 | 6 | A kutatói szűrő csak a kapu/küszöb MÓDOSÍTÁSÁNAK javaslatát utasítja el (kapu/küszöb + módosító ige 60 karakteren belül, vagy `judge.yaml`), a kapura mint mércére való hivatkozást nem. | 2026-10-13-án 2 hipotézist tévesen utasított el, mert a rationale megemlítette, hogy a szülő „a költségkapun bukik”. |
 | 2026-10-14 | 7 | `LOKY_MAX_CPU_COUNT` beállítva a HMM-modulban. | A launchd PATH-jában nincs `/usr/sbin/sysctl`, a joblib magszámlálása hibaüzenetet írt a napi naplóba (a futás ettől sikeres volt). |
+| 2026-10-14 | 7 | A dashboard Cloudflare-tunnelen: **evo.zentopia.hu** (felhasználói kérés). Külön `evolab` tunnel és két LaunchAgent (`com.evolutiontrader.dashboard`, `com.evolutiontrader.tunnel`), a meglévő tunnelekhez (jev-hud, cointidy, stream) nem nyúl. A helyi kiszolgáló (`evolab dashboard-serve`) csak 127.0.0.1-en figyel, és kizárólag a `reports/index.html`-t adja ki; minden más útvonal 404, a tunnel ingress-e is csak ezt a hostot engedi. Beállítás: `ops/setup-tunnel.sh` (újrafuttatható). | Ne kerüljön ki riport-JSON, adatbázis vagy más fájl; a többi projekt tunnele független maradjon. |
 
 ## Ismert Binance-leállások
 
