@@ -180,3 +180,4 @@ def test_daily_report_and_dashboard_write(cfg):
     page = dashboard.write(cfg, r).read_text(encoding="utf-8")
     assert "<svg" in page and SID in page and "prefers-color-scheme:dark" in page
     assert "L1: 0/1 átment" in daily.telegram_text(r)
+    assert r["awaiting_approval"] == []  # a várólista a létra L1 szintje, nem az L1-ítéletek listája

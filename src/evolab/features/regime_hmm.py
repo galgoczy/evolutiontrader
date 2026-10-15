@@ -13,7 +13,6 @@ Kimenet: `regime_daily_hmm` tábla, ugyanazzal a `date` szemantikával, mint a `
 from __future__ import annotations
 
 import logging
-import os
 import warnings
 
 import numpy as np
@@ -27,8 +26,6 @@ from evolab.data.universe import symbols
 from evolab.db import connect, init_db
 
 logging.getLogger("hmmlearn").setLevel(logging.ERROR)  # „Model is not converging” zaj a naplóban
-# a launchd PATH-jában nincs /usr/sbin/sysctl, amivel a joblib/loky a magokat számolná (hibaüzenet a naplóban)
-os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(os.cpu_count() or 1))
 
 DEFAULTS = {"n_states": 4, "refit_days": 30, "min_history": 365, "vol_window": 10, "seed": 7}
 

@@ -31,7 +31,8 @@ MutationType = Literal["filter_add", "param", "crossover", "regime_condition", "
 REGIME_RE = re.compile(r"^(up|down|flat)/(low|mid|high)$")
 # szabálysértések a szövegben (spec 6.2): holdout/paper-hivatkozás, kapu/küszöb-javaslat, „jó a visszateszt”
 FORBIDDEN = [
-    (re.compile(r"holdout", re.I), "holdout-hivatkozás"),
+    # a „holdout előtti / nélküli szakasz” megnevezése szabályos (épp a holdoutot zárja ki), minden más tilos
+    (re.compile(r"holdout(?![\s-]*(?:előtt|nélkül|kizár|-ablakon\s+kívül))", re.I), "holdout-hivatkozás"),
     (re.compile(r"\bpaper\w*", re.I), "paper-időszakra hivatkozás"),
     # csak a kapu/küszöb MÓDOSÍTÁSÁNAK javaslata tilos; a kapura mint mércére hivatkozni szabad
     (re.compile(r"judge\.yaml|\b(?:kapu|küszöb)\w*[^.]{0,60}?\b(?:módosít|csökkent|emel|lazít|változtat|kikapcsol"
