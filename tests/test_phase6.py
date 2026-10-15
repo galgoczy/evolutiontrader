@@ -67,6 +67,15 @@ def test_researcher_allows_mentioning_gates_but_not_changing_them(cfg):
     assert len(ok) == 2 and len(rejected) == 1 and "kapu/küszöb" in rejected[0]["reason"]
 
 
+def test_researcher_allows_pre_holdout_wording(cfg):
+    ok, rejected = researcher.validate([
+        hyp(falsifier="Cáfolt, ha a szülő visszatesztjében (a holdout előtti szakaszon) a PF 1,0 alatt van."),
+        hyp(falsifier="Cáfolt, ha a holdout nélküli időszakban a kötések átlaga negatív."),
+        hyp(rationale=LONG + " A holdout-időszakban is jól teljesített."),
+    ], cfg, TODAY, max_n=5)
+    assert len(ok) == 2 and rejected[0]["reason"] == "holdout-hivatkozás"
+
+
 def test_researcher_requires_non_param_mutation(cfg):
     raw = [hyp(mutation_type="param", param_grid={"fast": [10, 30]}), hyp(mutation_type="param")]
     ok, rejected = researcher.validate(raw, cfg, TODAY)

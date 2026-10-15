@@ -114,7 +114,9 @@ def build(cfg: Config, today: dt.date | None = None) -> dict:
                       ("trades", "open_positions", "return_pct", "max_dd_pct", "equity")},
                       "days": c.get("days"), "diff_pct": c.get("diff_pct"), "match_ok": c.get("ok"),
                       "final_check": c.get("final_check", False)})
-    approvals = [] if table.empty else table[table["result"] == "pass"]["strategy_id"].tolist()
+    from evolab.evolve.ladder import waiting
+
+    approvals = waiting(cfg)["strategy_id"].tolist()  # a tényleges várólista (L1 szint), nem minden L1-ítélet
     rec = health(cfg, 24)
     return {
         "date": today.isoformat(),
