@@ -2,7 +2,8 @@
 
 Szintek: L0 (új) -> L1 (visszateszt-kapun át, várólistán) -> L2 (élő paper) -> L3 (mikro-éles) -> L4.
 - L0 -> L1 és a visszalépések automatikusak (a bíró dönt, `actor = judge`);
-- L1 -> L2, L2 -> L3, L3 -> L4 csak emberi jóváhagyással (`/approve`, `actor = human`);
+- L1 -> L2, L2 -> L3, L3 -> L4 csak emberi jóváhagyással (`/approve`, `actor = human`); az L1 -> L2
+  jóváhagyás előbb lefuttatja az egyszeri holdout-próbát, és csak annak átmenésével léptet;
 - a várólista (L1) `approval.waitlist_days` nap után lejár: vissza L0-ba (a ledger-sor marad);
 - L2-ből a paper-ítélet `l2_demote` esetén `retired` (kiesik a paperből).
 Minden szintváltás egy sor a csak beszúrható `ladder_events` táblában.
@@ -87,14 +88,46 @@ def apply(cfg: Config, now: dt.datetime | None = None, paper_verdicts: list[dict
     return {"changes": changes, "waiting": waiting(cfg)["strategy_id"].tolist()}
 
 
-def approve(cfg: Config, sid: str) -> str:
-    """Emberi jóváhagyás: egy szinttel feljebb, ha a bíró szerint jogosult."""
+def holdout_result(cfg: Config, sid: str) -> dict | None:
+    """A variáns (azonos paraméterekkel) korábbi holdout-futása, ha volt."""
+    import json
+
+    from evolab.backtest import params_hash
+    from evolab.strategy import registry
+
+    p_hash = params_hash(registry.load(sid).meta.params)
+    with connect(cfg.db_path) as conn:
+        row = conn.execute("SELECT gate_result, holdout_metrics_json FROM trials WHERE strategy_id = ? AND "
+                           "params_hash = ? AND holdout_used = 1 ORDER BY created_at DESC LIMIT 1",
+                           (sid, p_hash)).fetchone()
+    return {"passed": row["gate_result"] == "holdout_pass", **json.loads(row["holdout_metrics_json"] or "{}")} \
+        if row else None
+
+
+def approve(cfg: Config, sid: str, run_holdout=None) -> str:
+    """Emberi jóváhagyás: egy szinttel feljebb, ha a bíró szerint jogosult.
+
+    L1 -> L2: az előléptetési kapunál fut a holdout (spec 5.6, koncepció 3.2), variánsonként egyszer.
+    Ha még nem futott, a jóváhagyás lefuttatja; L2-be csak holdout-pass után lép, bukásnál vissza L0-ba.
+    """
     lvl = level(cfg, sid)
     if lvl == "L1":
         if _latest_gate(cfg, sid, ("pass", "fail")) != "pass":
             raise LadderError(f"{sid}: a legutolsó L1-ítélet nem 'pass'")
-        set_level(cfg, sid, "L2", "jóváhagyva: élő paper", "human")
-        return f"{sid}: L1 -> L2 (a következő paper-körtől fut)"
+        h = holdout_result(cfg, sid)
+        if h is None:
+            from evolab.judge import holdout
+
+            try:
+                h = (run_holdout or holdout.run_holdout)(cfg, sid)
+            except holdout.HoldoutRefused as e:
+                raise LadderError(f"{sid}: a holdout nem futtatható: {e}") from e
+        summary = f"holdout PF {h.get('profit_factor', 0):.2f}, {h.get('trades', 0)} kötés"
+        if not h["passed"]:
+            set_level(cfg, sid, "L0", f"holdout bukott ({summary})", "judge")
+            return f"{sid}: a holdout-próba elbukott ({summary}) -> L0"
+        set_level(cfg, sid, "L2", f"jóváhagyva: élő paper ({summary})", "human")
+        return f"{sid}: L1 -> L2 ({summary}; a következő paper-körtől fut)"
     if lvl == "L2":
         if _latest_gate(cfg, sid, ("l2_pass", "l2_hold", "l2_demote")) != "l2_pass":
             raise LadderError(f"{sid}: a paper-ítélet még nem 'l2_pass' (L3-hoz 200 paper-kötés és a kapuk kellenek)")

@@ -34,7 +34,7 @@ Telegramon írd a botnak (legfeljebb egy órán belül végrehajtja):
 | Parancs | Hatás |
 |---|---|
 | `/waiting` | a jóváhagyásra várók listája (DSR, PBO, PF 2x költségnél, OOS/IS, a hipotézis egy mondatban) |
-| `/approve <azonosító>` | egy szinttel feljebb (L1 → L2: élő paper indul) |
+| `/approve <azonosító>` | egy szinttel feljebb; L1 → L2-nél előbb lefut az egyszeri holdout-próba (az utolsó 6 hónap, amit a bíró eddig nem látott), és csak átmenés esetén indul az élő paper |
 | `/reject <azonosító> <ok>` | a várólistáról elutasítva |
 | `/status` | rövid állapot |
 
