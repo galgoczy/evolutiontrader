@@ -107,9 +107,11 @@ def simulate(cfg: Config, sid: str, start_ms: int, bars: pd.DataFrame, regime: p
     """Jel a teljes soron, könyvelés `start_ms`-től, a végén nyitva maradó pozíciókkal."""
     strat = registry.load(sid)
     sig = strat.signals(bars, regime)
-    win = bars.index.get_level_values("ts") >= start_ms
-    return engine.run(bars[win], sig[win], strat.meta.timeframe, Costs.from_config(cfg.lab["costs"]),
-                      RiskParams.from_config(cfg.lab["risk"]), regime=regime[win], mode=mode, close_at_end=False)
+    # a teljes előzmény a motorba megy (a méretezés 30 napos volja és az ATR így a kezdettől érvényes),
+    # kereskedés csak `start_ms`-től (2026-10-16-i javítás: korábban a vol az első 30 napban hiányzott)
+    return engine.run(bars, sig, strat.meta.timeframe, Costs.from_config(cfg.lab["costs"]),
+                      RiskParams.from_config(cfg.lab["risk"]), regime=regime, mode=mode, close_at_end=False,
+                      trade_from_ms=start_ms)
 
 
 def _inputs(cfg: Config, tf: str, venue: str, cache: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
