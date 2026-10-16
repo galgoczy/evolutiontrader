@@ -89,9 +89,13 @@ def _wide(s: pd.Series, ts: np.ndarray, syms: list[str]) -> np.ndarray:
 
 def run(bars: pd.DataFrame, signals: pd.DataFrame, tf: str, costs: Costs, risk: RiskParams,
         regime: pd.DataFrame | None = None, initial_capital: float = INITIAL_CAPITAL,
-        sizer: Sizer | None = None, mode: str = "backtest", close_at_end: bool = True) -> Result:
+        sizer: Sizer | None = None, mode: str = "backtest", close_at_end: bool = True,
+        trade_from_ms: int | None = None) -> Result:
     """`close_at_end=False` (paper): a végén nyitva maradt pozíció nyitva marad, a mark áron
-    értékelve, és a `Result.open_positions` sorolja fel; a kötéslista csak a lezártakat tartalmazza."""
+    értékelve, és a `Result.open_positions` sorolja fel; a kötéslista csak a lezártakat tartalmazza.
+    `trade_from_ms` (paper, holdout): a mutatók (ATR, 30 napos vol a méretezéshez) a TELJES átadott
+    előzményen számolódnak, de kereskedés és equity csak ettől a gyertyanyitástól van. Az első
+    kereskedési gyertyán a jel-gyertya (az előző) célértéke szerint nyit."""
     step = tf_ms(tf)
     if bars.empty:  # pl. a paper első órái: még nincs lezárt gyertya a kezdet után
         return Result(pd.DataFrame(columns=TRADE_COLUMNS), pd.DataFrame(columns=["ts", "equity", "gross_exposure"]),
@@ -151,6 +155,8 @@ def run(bars: pd.DataFrame, signals: pd.DataFrame, tf: str, costs: Costs, risk: 
 
     for i in range(n_t):
         t = int(ts[i])
+        if trade_from_ms is not None and t < trade_from_ms:
+            continue  # bemelegedés: csak a mutatókhoz kell, itt még nincs kereskedés
         # --- 1. nyitó: zárások, majd nyitások a jel-gyertya célértéke szerint
         failed = br.failed_at is not None
         desired = [TGT[i - 1, j] if i > 0 and valid[i - 1, j] else 0.0 for j in range(n_s)]

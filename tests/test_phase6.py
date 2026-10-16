@@ -283,7 +283,10 @@ def test_ladder_l1_waitlist_approve_reject_expiry(cfg):
         _verdict(cfg, sid, "pass")
     res = ladder.apply(cfg)
     assert sorted(res["waiting"]) == ["trend-ema-cross-4h-01", "trend-ema-cross-4h-02", "trend-ema-cross-4h-03"]
-    assert "L1 -> L2" in ladder.approve(cfg, "trend-ema-cross-4h-01")
+    calls = []
+    fake = lambda c, sid: calls.append(sid) or {"passed": True, "profit_factor": 1.4, "trades": 50}  # noqa: E731
+    assert "L1 -> L2" in ladder.approve(cfg, "trend-ema-cross-4h-01", run_holdout=fake)
+    assert calls == ["trend-ema-cross-4h-01"]
     assert ladder.level(cfg, "trend-ema-cross-4h-01") == "L2"
     ladder.reject(cfg, "trend-ema-cross-4h-02", "túl kevés kötés")
     assert ladder.level(cfg, "trend-ema-cross-4h-02") == "L0"
@@ -296,6 +299,17 @@ def test_ladder_l1_waitlist_approve_reject_expiry(cfg):
         with pytest.raises(Exception, match="append-only"):
             conn.execute("DELETE FROM ladder_events")
     assert actors.count("human") == 2
+
+
+def test_approve_runs_holdout_once_and_failure_demotes(cfg):
+    sid = "trend-ema-cross-4h-02"
+    _strategy(cfg, sid)
+    _verdict(cfg, sid, "pass")
+    ladder.apply(cfg)
+    out = ladder.approve(cfg, sid, run_holdout=lambda c, s: {"passed": False, "profit_factor": 0.9, "trades": 40})
+    assert "elbukott" in out and ladder.level(cfg, sid) == "L0"
+    with pytest.raises(ladder.LadderError):
+        ladder.approve(cfg, sid)  # L0-ról nincs jóváhagyható lépés
 
 
 def test_ladder_demotion_removes_from_paper_roster(cfg):
@@ -332,6 +346,8 @@ def test_telegram_commands_only_from_own_chat(cfg, monkeypatch):
         {"update_id": 12, "message": {"chat": {"id": 42}, "text": f"/approve {sid}"}},
         {"update_id": 13, "message": {"chat": {"id": 42}, "text": "szia"}},
     ]
+    monkeypatch.setattr("evolab.judge.holdout.run_holdout",
+                        lambda c, s: {"passed": True, "profit_factor": 1.3, "trades": 60})
     done = commands.poll(cfg, send=sent.append, fetch=lambda off: [u for u in updates if off is None or u["update_id"] >= off])
     assert [c for c, _ in done] == ["/waiting", f"/approve {sid}"]
     assert sid in sent[0] and "L1 -> L2" in sent[1]

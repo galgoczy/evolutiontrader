@@ -6,7 +6,7 @@
   változaton, amelynek minden közös numerikus paramétere legfeljebb `same_family_param_delta_pct`
   százalékkal tér el, az új futás tilos (a holdout „elégett” erre a környékre).
 - A jel a teljes adaton (holdout-ablakkal együtt) számolódik, hogy a mozgóátlagok bemelegedjenek;
-  a szimulátor csak a holdout-ablak gyertyáin kereskedik.
+  a szimulátor csak a holdout-ablak gyertyáin kereskedik (a méretezés volja és az ATR a teljes előzményen).
 """
 
 from __future__ import annotations
@@ -71,8 +71,9 @@ def run_holdout(cfg: Config, strategy_id: str, today: dt.date | None = None,
     regime = align_regime(backtest.read_regime(cfg, syms), bars.index)
     sig = strat.signals(bars, regime)
     window = bars.index.get_level_values("ts") >= cut_ms
-    res = engine.run(bars[window], sig[window], tf, Costs.from_config(cfg.lab["costs"]),
-                     RiskParams.from_config(cfg.lab["risk"]), regime=regime[window])
+    # a mutatók (méretezési vol, ATR) a teljes előzményen, kereskedés csak a holdout-ablakban
+    res = engine.run(bars, sig, tf, Costs.from_config(cfg.lab["costs"]), RiskParams.from_config(cfg.lab["risk"]),
+                     regime=regime, trade_from_ms=cut_ms)
     pf = metrics.profit_factor(res.trades["pnl"]) if len(res.trades) else 0.0
     passed = pf >= cfg.judge["L1_holdout"]["pf_min"]
     info = {"params": strat.meta.params, "window_start": cut.strftime("%Y-%m-%d"),

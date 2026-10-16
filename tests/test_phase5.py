@@ -181,3 +181,15 @@ def test_daily_report_and_dashboard_write(cfg):
     assert "<svg" in page and SID in page and "prefers-color-scheme:dark" in page
     assert "L1: 0/1 átment" in daily.telegram_text(r)
     assert r["awaiting_approval"] == []  # a várólista a létra L1 szintje, nem az L1-ítéletek listája
+
+
+def test_paper_sizing_warm_from_first_bar(cfg):
+    """A paper első napjaiban is van pozíció: a méretezés 30 napos volja a teljes előzményből jön
+    (2026-10-16-i hiba: a motor csak a paper-ablakot kapta, és 30 napig 0 méretet adott)."""
+    paper_env(cfg, days=5)
+    out = pr.run(cfg, sync=False, log=lambda *_: None)[SID]
+    eq = pd.read_parquet(pr.paper_dir(cfg) / SID / "equity.parquet")
+    assert out["open_positions"] + out["trades"] > 0
+    assert (eq["gross_exposure"] > 0).any()
+    c = pr.compare(cfg, SID)
+    assert c["paper_trades"] == c["backtest_trades"] and c["diff_pct"] == pytest.approx(0.0, abs=1e-9)
