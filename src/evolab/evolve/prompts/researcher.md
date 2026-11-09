@@ -20,6 +20,16 @@ Dátum: $date
 8. expected_regimes elemei "trend/vol" alakúak: trend ∈ {up, down, flat}, vol ∈ {low, mid, high}.
 9. A stratégia csak a gyertyáig ismert adatból számolhat (nincs jövőbe látás), és 4h vagy 1h idősíkon fut,
    a 6 coinos univerzumon (BTC, ETH, SOL, BNB, XRP, DOGE USDT perpetual).
+10. Egy családból naponta legfeljebb $n_family hipotézis; a többit a rendszer elutasítja.
+11. A gyerek legfeljebb $max_gen. generációs lehet (az alapstratégia 0.); mélyebb szülő elutasítva.
+    A generáció a variánslistában látszik.
+
+## Túlillesztés: mi számít bizonyítéknak
+Ugyanannak a stratégiának az újabb és újabb finomítása ugyanazon a múltbeli adaton nem új bizonyíték:
+minden körben azt a változatot tartjuk meg, amelyik a már látott adaton jobb, így a javulás nagy része a
+múlt véletlenjeinek megtanulása. Egy sokszor módosított ág újabb szűrője ezért gyenge hipotézis.
+Erős hipotézis az, amely független piaci mechanizmusra épít (más szereplő, más viselkedés, más szerkezet),
+akár új alapstratégiával (parent_strategy_id: null, rewrite), akár egy eddig kevéssé vizsgált családban.
 
 mutation_type: filter_add | param | crossover | regime_condition | rewrite
 

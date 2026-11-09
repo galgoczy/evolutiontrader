@@ -41,6 +41,8 @@ paths:
 researcher:                     # Claude Code CLI-n át, előfizetéssel (döntés 2026-10-12)
   model: claude-opus-5-5
   max_hypotheses_per_day: 3
+  max_per_family_per_day: 1     # diverzitás: egy család naponta legfeljebb ennyi hipotézist kap (döntés 2026-11-09)
+  max_generation: 3             # a gyerek legfeljebb ennyiedik generáció egy alapstratégiától (döntés 2026-11-09)
 
 developer:                      # fej nélküli Claude Code, git worktree-ben (data/worktrees/)
   model: claude-opus-5-5

@@ -63,7 +63,7 @@ def test_researcher_allows_mentioning_gates_but_not_changing_them(cfg):
         hyp(rationale=LONG + " A szülő a költségérzékenységi kapun bukik, a szűrő ezen javíthat."),
         hyp(change="A DSR-küszöb lazítása 0,9-re, mert a kapu túl szigorú a trendcsaládra."),
         hyp(change="A trendjel csak magas vol mellett; a kapuk és küszöbök változatlanok."),
-    ], cfg, TODAY, max_n=5)
+    ], cfg, TODAY, max_n=5, max_per_family=5)
     assert len(ok) == 2 and len(rejected) == 1 and "kapu/küszöb" in rejected[0]["reason"]
 
 
@@ -72,14 +72,43 @@ def test_researcher_allows_pre_holdout_wording(cfg):
         hyp(falsifier="Cáfolt, ha a szülő visszatesztjében (a holdout előtti szakaszon) a PF 1,0 alatt van."),
         hyp(falsifier="Cáfolt, ha a holdout nélküli időszakban a kötések átlaga negatív."),
         hyp(rationale=LONG + " A holdout-időszakban is jól teljesített."),
-    ], cfg, TODAY, max_n=5)
+    ], cfg, TODAY, max_n=5, max_per_family=5)
     assert len(ok) == 2 and rejected[0]["reason"] == "holdout-hivatkozás"
 
 
 def test_researcher_requires_non_param_mutation(cfg):
     raw = [hyp(mutation_type="param", param_grid={"fast": [10, 30]}), hyp(mutation_type="param")]
-    ok, rejected = researcher.validate(raw, cfg, TODAY)
+    ok, rejected = researcher.validate(raw, cfg, TODAY, max_per_family=5)
     assert len(ok) == 1 and "nem-paraméter" in rejected[0]["reason"]
+
+
+def test_researcher_limits_hypotheses_per_family(cfg):
+    """Diverzitás (döntés 2026-11-09): egy család naponta legfeljebb `max_per_family_per_day` hipotézist kap."""
+    raw = [hyp(), hyp(change="A trendjel csak alacsony volatilitású rezsimben aktív."),
+           hyp(family="volbreak", parent_strategy_id="volbreak-squeeze-4h-04")]
+    ok, rejected = researcher.validate(raw, cfg, TODAY)
+    assert [h.family for h in ok] == ["trend", "volbreak"]
+    assert len(rejected) == 1 and "családonként" in rejected[0]["reason"]
+
+
+def test_researcher_limits_generation_depth(cfg):
+    """A gyerek legfeljebb `max_generation`. generációs lehet; az alapstratégia 0."""
+    known = {f"trend-g{k}": "trend" for k in range(4)}
+    gens = {f"trend-g{k}": k for k in range(4)}
+    raw = [hyp(parent_strategy_id="trend-g2"), hyp(family="trend", parent_strategy_id="trend-g3")]
+    ok, rejected = researcher.validate(raw, cfg, TODAY, known=known, gens=gens, max_per_family=5)
+    assert [h.parent_strategy_id for h in ok] == ["trend-g2"]
+    assert "túl mély leszármazás" in rejected[0]["reason"]
+
+
+def test_generations_from_headers(tmp_path):
+    def write(name, parent):
+        p = tmp_path / f"{name}.py"
+        p.write_text(f'"""\nfamily: trend\nparent_id: {parent or "null"}\n"""\n', encoding="utf-8")
+        return p
+
+    files = {"a": write("a", None), "b": write("b", "a"), "c": write("c", "b"), "x": write("x", "ismeretlen")}
+    assert researcher.generations(files) == {"a": 0, "b": 1, "c": 2, "x": 1}
 
 
 def test_researcher_run_saves_and_is_idempotent(cfg):
@@ -88,6 +117,7 @@ def test_researcher_run_saves_and_is_idempotent(cfg):
     def ask(prompt, schema):
         calls.append(prompt)
         assert "A mai napi riport" in prompt and "trend-ema-cross-4h-01" in prompt and "parent_signals" in prompt
+        assert "trend-ema-cross-4h-01 (trend, 4h, 0. generáció)" in prompt and "Túlillesztés" in prompt
         return {"hypotheses": [hyp(), hyp(rationale="rövid")]}
 
     ok, rejected = researcher.run(cfg, today=TODAY, ask=ask)
