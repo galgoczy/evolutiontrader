@@ -101,16 +101,44 @@ JSON_SCHEMA = {
 }
 
 
+def generations(files: dict[str, Path] | None = None) -> dict[str, int]:
+    """Variáns -> generáció (alapstratégia = 0, a gyereke 1, ...), a fájlfejlécek `parent_id`-jéből."""
+    files = files if files is not None else registry.discover()
+    parent: dict[str, str | None] = {}
+    for sid, path in files.items():
+        try:
+            parent[sid] = registry.parse_header(path).get("parent_id")
+        except registry.StrategyRejected:
+            parent[sid] = None
+
+    def depth(sid: str) -> int:
+        n, seen = 0, {sid}
+        while parent.get(sid) and parent[sid] not in seen:   # ismeretlen szülőnél / körnél megáll
+            sid = parent[sid]
+            seen.add(sid)
+            n += 1
+        return n
+
+    return {sid: depth(sid) for sid in parent}
+
+
 def validate(raw: list[dict], cfg: Config, today: dt.date, known: dict[str, str] | None = None,
-             max_n: int | None = None) -> tuple[list[Hypothesis], list[dict]]:
+             max_n: int | None = None, gens: dict[str, int] | None = None,
+             max_per_family: int | None = None) -> tuple[list[Hypothesis], list[dict]]:
     """Visszaadja (elfogadott hipotézisek azonosítóval, elutasítottak okkal).
 
-    `known`: meglévő variáns -> család. A napi „legalább 1 nem-paraméter mutáció” szabály: ha minden
-    elfogadott hipotézis `param`, csak az első marad, a többi elutasítva.
+    `known`: meglévő variáns -> család; `gens`: variáns -> generáció. A napi „legalább 1 nem-paraméter
+    mutáció” szabály: ha minden elfogadott hipotézis `param`, csak az első marad, a többi elutasítva.
+    Diverzitás (döntés 2026-11-09): egy család naponta legfeljebb `max_per_family_per_day` hipotézist kap,
+    és a szülő generációja legfeljebb `max_generation - 1` lehet.
     """
     families = set(cfg.families["families"])
     known = known if known is not None else {sid: sid.split("-")[0] for sid in registry.discover()}
-    max_n = max_n or int(cfg.lab["researcher"]["max_hypotheses_per_day"])
+    gens = gens if gens is not None else generations()
+    rcfg = cfg.lab["researcher"]
+    max_n = max_n or int(rcfg["max_hypotheses_per_day"])
+    max_per_family = max_per_family or int(rcfg.get("max_per_family_per_day", max_n))
+    max_gen = int(rcfg.get("max_generation", 10**6))
     ok: list[Hypothesis] = []
     rejected: list[dict] = []
     for item in raw:
@@ -125,8 +153,13 @@ def validate(raw: list[dict], cfg: Config, today: dt.date, known: dict[str, str]
             reasons.append(f"ismeretlen család: {h.family}")
         if h.parent_strategy_id and known.get(h.parent_strategy_id) != h.family:
             reasons.append(f"ismeretlen vagy más családba tartozó szülő: {h.parent_strategy_id}")
+        elif h.parent_strategy_id and gens.get(h.parent_strategy_id, 0) + 1 > max_gen:
+            reasons.append(f"túl mély leszármazás: a szülő {gens[h.parent_strategy_id]}. generációs, "
+                           f"a gyerek legfeljebb {max_gen}. lehet")
         text = " ".join([h.change, h.rationale, h.falsifier])
         reasons += [why for rx, why in FORBIDDEN if rx.search(text)]
+        if sum(o.family == h.family for o in ok) >= max_per_family:
+            reasons.append(f"családonként naponta legfeljebb {max_per_family} hipotézis ({h.family})")
         if len(ok) >= max_n:
             reasons.append(f"napi legfeljebb {max_n} hipotézis")
         if reasons:
@@ -155,10 +188,13 @@ def _lib_api() -> str:
 
 def _strategies() -> str:
     lines = []
-    for sid, path in registry.discover().items():
+    files = registry.discover()
+    gens = generations(files)
+    for sid, path in files.items():
         try:
             m = registry.load_file(path).meta
-            lines.append(f"- {sid} ({m.family}, {m.timeframe}): {json.dumps(m.params, ensure_ascii=False)}")
+            lines.append(f"- {sid} ({m.family}, {m.timeframe}, {gens.get(sid, 0)}. generáció): "
+                         f"{json.dumps(m.params, ensure_ascii=False)}")
         except registry.StrategyRejected:
             continue
     return "\n".join(lines)
@@ -194,7 +230,9 @@ def build_prompt(cfg: Config, today: dt.date, report_md: str, trial_counts: list
     tc_txt = "\n".join(f"- {t['family']}: {t['configs']} konfiguráció, hatékony N {t['n_eff']}, "
                        f"SR0 évesítve {t['sr0_annual']:.2f}" for t in trial_counts) or "-"
     return Template(template_text(PROMPT)).substitute(
-        date=today.isoformat(), n_max=cfg.lab["researcher"]["max_hypotheses_per_day"], families=fam_txt,
+        date=today.isoformat(), n_max=cfg.lab["researcher"]["max_hypotheses_per_day"],
+        n_family=cfg.lab["researcher"].get("max_per_family_per_day", cfg.lab["researcher"]["max_hypotheses_per_day"]),
+        max_gen=cfg.lab["researcher"].get("max_generation", "korlátlan"), families=fam_txt,
         strategies=_strategies(), lib_api=_lib_api(), history=hist_txt, trial_counts=tc_txt, report=report_md)
 
 
